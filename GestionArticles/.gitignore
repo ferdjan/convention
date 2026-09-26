@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Artefacts de build PyInstaller
+build/
+dist/
+*.spec
+_internal/
+*.exe
+
+# Sauvegardes de base de données
+*.backup*.db
+
+# Fichiers temporaires d'export
+documents_pdf/.tmp/

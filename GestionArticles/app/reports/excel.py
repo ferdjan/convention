@@ -6,6 +6,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from app.utils import excel_safe_text
+
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 TITLE_FONT = Font(bold=True, size=14, color="1F4E78")
@@ -26,7 +28,7 @@ def build_excel(
     category: str,
     items: list[dict],
     total_ht: float,
-    tva_rate: float = 0.19,
+    tva_rate: float,
     tva_amount: float | None = None,
     total_ttc: float | None = None,
 ) -> Path:
@@ -50,13 +52,13 @@ def build_excel(
 
     ws["A3"] = "N° :"
     ws["A3"].font = LABEL_FONT
-    ws["B3"] = number
+    ws["B3"] = excel_safe_text(number)
     ws["E3"] = "Date :"
     ws["E3"].font = LABEL_FONT
-    ws["F3"] = date_text
+    ws["F3"] = excel_safe_text(date_text)
     ws["A4"] = "Liste :"
     ws["A4"].font = LABEL_FONT
-    ws["B4"] = category
+    ws["B4"] = excel_safe_text(category)
 
     header_row = 6
     for col, title in enumerate(COLUMNS, start=1):
@@ -70,9 +72,9 @@ def build_excel(
     for item in items:
         quantity = float(item["quantity"])
         unit_price = float(item["unit_price_ht"])
-        ws.cell(row=row_idx, column=1, value=item["code"])
-        ws.cell(row=row_idx, column=2, value=item["designation"])
-        ws.cell(row=row_idx, column=3, value=item["unit"])
+        ws.cell(row=row_idx, column=1, value=excel_safe_text(item["code"]))
+        ws.cell(row=row_idx, column=2, value=excel_safe_text(item["designation"]))
+        ws.cell(row=row_idx, column=3, value=excel_safe_text(item["unit"]))
         ws.cell(row=row_idx, column=4, value=unit_price).number_format = MONEY_FORMAT
         ws.cell(row=row_idx, column=5, value=quantity)
         ws.cell(row=row_idx, column=6, value=round(quantity * unit_price, 2)).number_format = MONEY_FORMAT

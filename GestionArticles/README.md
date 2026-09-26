@@ -1,21 +1,25 @@
-# Gestion Articles — Informatique & Bureautique
+# Gestion Articles — Conventions & Commandes
 
-Application **Windows hors ligne** permettant de sélectionner des articles à partir de plusieurs listes (Informatique, Bureautique, et toute autre liste ajoutée), de saisir les quantités, de calculer le total HT, la **TVA (19 %)** et le total TTC, d'enregistrer les documents dans un historique SQLite et de générer un **PDF et un fichier Excel**.
-
-Le projet est volontairement simple et lisible afin de pouvoir être **repris, compris et amélioré** plus tard par un autre développeur ou par le propriétaire du projet.
+Application **Windows hors ligne** de gestion des conventions et de leurs commandes
+d'articles. Chaque **convention** possède une liste d'articles à **prix figés**
+pendant toute sa période, se découpe en **exercices annuels** (périodes
+configurables, ex. du 15-08-2026 au 14-08-2027) avec un **plafond** à ne pas
+dépasser. L'application enregistre chaque commande, en assure la traçabilité
+(n° unique, date, lignes, PDF + Excel archivés) et déclenche des **alertes** à
+80 %, 90 % et 100 % du plafond, **par exercice** — y compris consultation des
+exercices passés. Aucune connexion Internet n'est requise.
 
 ---
 
-## 1. Objectif du projet
+## 1. Objectif
 
-Le besoin fonctionnel est le suivant :
+Le besoin fonctionnel :
 
-1. Charger les articles des feuilles Excel `informatique` et `bureautique`.
-2. Choisir la liste à utiliser avec une liste déroulante.
+1. Importer la liste des articles d'une convention depuis Excel.
+2. Choisir la convention, puis l'exercice courant (période + plafond).
 3. Rechercher un article par N°, désignation ou unité.
-4. Ajouter plusieurs articles au document.
-5. Saisir une quantité pour chaque article.
-6. Calculer automatiquement :
+4. Ajouter plusieurs articles au document, saisir une quantité.
+5. Calculer automatiquement :
 
 ```text
 Total ligne = Prix unitaire HT × Quantité
@@ -24,34 +28,27 @@ TVA (19 %) = Total HT × 0,19
 Total TTC = Total HT + TVA
 ```
 
-7. Enregistrer le document dans l'historique.
-8. Générer un **PDF** et un **fichier Excel** du document.
-9. Ajouter d'autres listes et leur associer une feuille Excel (voir §7).
-10. Fonctionner **sans Internet**.
+6. Contrôler le plafond de l'exercice : alertes à 80 % / 90 %, **blocage ferme à 100 %**.
+7. Enregistrer le document (PDF + Excel + historique) en une transaction.
+8. Consulter l'historique, filtré par convention et exercice.
+9. Générer un rapport de consommation par exercice (Excel).
 
-### Données initiales
-
-Le fichier fourni contient actuellement :
-
-- **218 articles Informatique**
-- **175 articles Bureautique**
-- **393 articles exploitables au total**
-
-La ligne `TOTAL` éventuelle en fin de feuille Bureautique n'est pas importée comme article.
+Les prix d'une convention sont **figés pendant tout l'exercice** : ils ne changent
+que par import d'une nouvelle liste, au nouvel exercice.
 
 ---
 
-## 2. Technologies utilisées
+## 2. Technologies
 
 - **Python 3.11+**
-- **Tkinter / ttk** : interface graphique Windows
+- **Tkinter / ttk** : interface graphique Windows (barre latérale + écrans)
 - **SQLite** : base de données locale
 - **ReportLab** : génération des PDF
-- **Open XML / XLSX** : lecture directe du classeur Excel sans dépendre de Microsoft Excel
-- **openpyxl** : génération des fichiers `.xlsx` (documents et modèle)
+- **Open XML / XLSX** : lecture directe du classeur Excel sans Microsoft Excel
+- **openpyxl** : génération des fichiers `.xlsx` (documents, modèle, rapports)
 - **PyInstaller** : création d'une version `.exe`
 
-Le projet ne nécessite ni serveur web, ni connexion Internet, ni base de données distante.
+Ni serveur web, ni connexion Internet, ni base distante.
 
 ---
 
@@ -60,16 +57,40 @@ Le projet ne nécessite ni serveur web, ni connexion Internet, ni base de donné
 ```text
 GestionArticles/
 │
-├── main.py                 # Interface graphique et logique principale
-├── db.py                   # Accès à SQLite et gestion des données
-├── xlsx_importer.py        # Lecture/import Excel + génération du modèle vierge
-├── pdf_report.py           # Création des documents PDF
-├── excel_report.py         # Création des documents Excel (.xlsx)
+├── main.py                 # Point d'entrée (démarre app.ui.app)
 ├── seed_db.py              # Import manuel du fichier source dans SQLite
+│
+├── app/
+│   ├── config.py           # Configuration (chemins, TVA, seuils, thèmes)
+│   ├── database.py         # SQLite : schéma, exercices, migration, documents
+│   ├── utils.py            # Prix, dates, totaux et formats
+│   ├── reports/
+│   │   ├── pdf.py          # Documents PDF
+│   │   ├── excel.py        # Documents Excel (.xlsx)
+│   │   └── annual.py       # Rapport de consommation par exercice (.xlsx)
+│   ├── services/
+│   │   └── importer.py     # Lecture/import Excel + génération du modèle vierge
+│   └── ui/
+│       ├── app.py          # Fenêtre : barre latérale, en-tête, orchestration
+│       ├── theme.py        # Style ttk, thèmes clair/sombre, jauge budget
+│       ├── common.py       # Utilitaires UI (montants, dates, fichiers)
+│       ├── views/
+│       │   ├── dashboard.py    # Tableau de bord (cartes par convention)
+│       │   ├── document.py     # Nouveau document (panier, exercice, blocage)
+│       │   ├── history.py      # Historique (filtres convention + exercice)
+│       │   ├── conventions.py  # Conventions et exercices (intégré)
+│       │   ├── reports.py      # Rapport de consommation
+│       │   └── settings.py     # Thème, TVA, à propos
+│       └── dialogs/        # Fenêtres modales autonomes
+│           ├── confirm.py       # Récapitulatif + blocage plafond
+│           ├── conventions.py   # Édition statut / exercice / clôture
+│           ├── categories.py    # Suppression d'une liste
+│           ├── importer.py      # Choix de la feuille et du nom de liste
+│           ├── documents.py     # Détail des lignes d'un document
+│           └── help.py          # Rappel du format Excel
 │
 ├── source_listes.xlsx      # Classeur Excel contenant les listes initiales
 ├── gestion_articles.db     # Base SQLite locale (créée/utilisée par l'application)
-│
 ├── documents_pdf/          # PDF et Excel générés par l'application
 │
 ├── run.bat                 # Lance l'application en mode Python
@@ -81,158 +102,129 @@ GestionArticles/
 ### Rôle des fichiers principaux
 
 #### `main.py`
-Point d'entrée de l'application. Il contient notamment :
+Point d'entrée minimal : il appelle `run()` depuis `app/ui/app.py` et affiche
+l'écran « Démarrage impossible » si la base ne peut pas être ouverte ou migrée.
 
-- la fenêtre principale ;
-- les onglets **Nouveau document** et **Historique** ;
-- la recherche des articles ;
-- l'ajout/suppression de lignes ;
-- le calcul du total HT ;
-- l'enregistrement du document ;
-- l'appel au générateur PDF.
+#### `app/ui/app.py`
+Fenêtre principale : **barre latérale** de navigation (6 écrans), en-tête avec
+titre/sous-titre, bascule clair/sombre, et orchestration des vues.
 
-#### `db.py`
-Centralise les opérations SQLite :
+#### `app/ui/views/dashboard.py` — Tableau de bord
+Une carte par convention active : exercice courant (libellé + période), jauge
+colorée, plafond/consommé/reste, état d'alerte et bouton « Nouveau document ».
 
-- création des tables ;
-- gestion des articles ;
-- recherche des articles ;
-- numérotation des documents ;
-- enregistrement des documents et de leurs lignes ;
-- consultation de l'historique.
+#### `app/ui/views/document.py` — Nouveau document
+Tient l'état du document en cours : recherche, panier, calcul HT/TVA/TTC,
+contrôle du plafond de l'exercice courant, et enregistrement (PDF + Excel +
+base) en une opération. **Le bouton d'enregistrement se désactive quand
+« consommé + ce document » atteint le plafond.**
 
-#### `xlsx_importer.py`
-Lit le classeur `.xlsx` directement (sans dépendre de Microsoft Excel). Il expose :
+#### `app/ui/views/history.py` — Historique
+Recherche, filtres par convention et exercice, aperçu du document sélectionné,
+ouverture PDF/Excel, export et suppression.
 
-- `read_sheet_names()` : liste les feuilles du classeur ;
-- `extract_articles(path, sheet_map)` : associe chaque liste (catégorie) à une feuille ;
-- `write_template()` : génère un classeur modèle vierge (une feuille par liste).
+#### `app/ui/views/conventions.py` — Conventions
+Tableau de **toutes** les conventions (statut actif / clôturé / expiré, échéance,
+exercice actif, plafond, consommé, reste) et, pour la convention sélectionnée,
+liste de ses exercices (ouverture / clôture / édition).
 
-Les quatre premières colonnes attendues sont :
-
-```text
-N° | Désignation | Unité de mesure | Prix unitaire HT
-```
-
-Le code contient également une normalisation des formats de prix (`parse_price`), notamment pour les écritures avec virgule et séparateurs de milliers.
-
-#### `pdf_report.py`
-Construit le PDF A4 contenant :
-
-- numéro du document ;
-- date ;
-- liste utilisée ;
-- détail des articles ;
-- prix unitaires ;
-- quantités ;
-- total HT.
-
-#### `excel_report.py`
-Construit la version `.xlsx` du document (via `openpyxl`) avec la même
-présentation : en-tête, tableau des articles, total HT. Ce module est utilisé à
-l'enregistrement d'un document et lors de l'export d'un document depuis
-l'historique.
+#### `app/database.py`
+Centralise SQLite : schéma, migration transactionnelle, exercices, articles,
+numérotation des documents, enregistrement transactionnel (document + lignes +
+fichiers), historique, rapports.
 
 ---
 
 ## 4. Base de données
 
-La base locale utilisée est :
+Base locale : `gestion_articles.db`.
 
-```text
-gestion_articles.db
-```
-
-Les données importantes sont organisées autour de quatre concepts :
-
-### Listes (catégories)
-
-Contient les listes disponibles et la feuille Excel associée :
+### Listes (conventions)
 
 ```text
 nom
 feuille Excel
-préfixe de numérotation
+préfixe de numérotation (INF, BUR, ...)
+statut (actif / clôturé / expiré)
+échéance (facultative, AAAA-MM-JJ)
 ```
 
-Deux listes sont créées par défaut : `Informatique` (préfixe `INF`) et
-`Bureautique` (préfixe `BUR`). L'application migre automatiquement une base
-existante (suppression de l'ancienne contrainte qui limitait les catégories,
-ajout du préfixe).
+Le statut affiché est **actif**, **clôturé** ou **expiré**. Une convention active
+dont la date d'échéance est dépassée est automatiquement **expirée**. Une
+convention expirée ou clôturée n'accepte plus de nouveau document.
 
-Le numéro d'un document est propre à chaque liste :
+Deux conventions sont créées par défaut sur une base neuve : `Informatique`
+(préfixe `INF`) et `Bureautique` (préfixe `BUR`).
+
+### Exercices
+
+Chaque convention se découpe en exercices annuels :
 
 ```text
-<préfixe>-<année>-<numéro>      ex. INF-2026-0001
+convention (catégorie)
+libellé (ex. « 2026-2027 »)
+date de début (ex. 2026-08-15)
+date de fin   (ex. 2027-08-14)
+plafond (NULL = illimité)
+statut (active / closed)
+instantané de clôture : consommé / reste / date de clôture
 ```
+
+- **Un seul exercice actif par convention.**
+- Le **consommé courant** est calculé dynamiquement (somme des documents de
+  l'exercice, en HT).
+- La **clôture** archive le cumul (consommé / reste) ; le **reste ne se reporte
+  pas** : le nouvel exercice repart de zéro.
+- Les exercices passés restent **consultables en lecture seule**.
 
 ### Articles
 
-Contient les références importées depuis Excel :
-
 ```text
-catégorie
-code
-désignation
-unité
-prix unitaire HT
+catégorie, code, désignation, unité, prix unitaire HT
 ```
+
+L'identité d'un article est `(catégorie, code, désignation, unité)` ; le prix
+est figé pendant l'exercice et remplacé par import.
 
 ### Documents
 
-Contient l'en-tête des documents enregistrés :
-
 ```text
-numéro
+numéro (ex. INF-2026-2027-0001)
 date
 catégorie
-total HT
-taux de TVA (19 %)
-montant TVA
-total TTC
-chemin du PDF
-chemin du fichier Excel
+exercice (libellé)
+total HT, taux TVA (19 %), montant TVA, total TTC
+chemin du PDF, chemin du fichier Excel
 ```
+
+Le numéro est propre à chaque couple (convention, exercice) :
+`<préfixe>-<libellé exercice>-<séquence>` (ex. `INF-2026-2027-0001`).
 
 ### Lignes de document
 
-Contient les articles utilisés dans chaque document :
+Copie du code, de la désignation, de l'unité et du prix au moment de la création :
+l'historique reste fidèle même si la liste évolue.
 
-```text
-document
-code
-Désignation
-unité
-prix unitaire HT
-quantité
-total HT
-```
+### Migration
 
-Le prix est enregistré dans la ligne du document afin de conserver l'historique du prix utilisé au moment de la création du document.
+La migration est **transactionnelle** : toute erreur annule l'opération et la
+base reste inchangée. Elle convertit les anciennes tables `budgets` /
+`budget_archives` en exercices, rattache les documents existants à leur exercice,
+et retire les anciennes tables (`audit_log`, `price_history`, `budgets`,
+`budget_archives`) issues de la version précédente.
 
 ---
 
 ## 5. Lancer le projet en développement
 
-### Prérequis
-
-Installer **Python 3.11 ou une version compatible**.
-
-Vérifier :
+Prérequis : **Python 3.11 ou supérieur**.
 
 ```powershell
 python --version
-```
-
-Puis installer les dépendances :
-
-```powershell
 python -m pip install -r requirements.txt
 ```
 
-### Démarrer l'application
-
-Double-cliquer sur :
+Démarrer :
 
 ```text
 run.bat
@@ -248,102 +240,74 @@ python main.py
 
 ## 6. Création de l'exécutable Windows
 
-Pour créer une version sans console :
-
 ```text
 build.bat
 ```
 
-Le résultat est généré dans :
-
-```text
-dist\GestionArticles\
-```
-
-L'exécutable principal est :
-
-```text
-GestionArticles.exe
-```
-
-Pour distribuer l'application, conserver l'ensemble du dossier généré par PyInstaller, et pas seulement le fichier `.exe`.
+Résultat dans `dist\GestionArticles\`, exécutable principal `GestionArticles.exe`.
+Distribuer l'ensemble du dossier généré, pas seulement le `.exe`.
 
 ---
 
 ## 7. Import des listes Excel
 
-Le fichier :
+Le fichier `source_listes.xlsx` sert de source initiale. Import depuis l'écran
+« Conventions » ou au premier lancement.
 
-```text
-source_listes.xlsx
-```
-
-sert de source initiale.
-
-L'application peut également importer un autre fichier Excel depuis le menu :
-
-```text
-Fichier → Importer des articles Excel...
-```
-
-L'import se fait simplement, une feuille à la fois :
-
-1. Choisir le fichier `.xlsx`.
-2. Sélectionner la **feuille** à importer.
-3. Saisir le **nom de la liste** (proposé à partir du nom de la feuille).
-
-La liste est créée si elle n'existe pas. Si elle existe déjà, ses articles sont
-remplacés après confirmation. Chaque feuille doit contenir les quatre colonnes
-attendues dans cet ordre :
+Chaque feuille contient quatre colonnes, dans cet ordre :
 
 ```text
 N° | Désignation | Unité de mesure | Prix unitaire HT
 ```
 
-### Supprimer une liste
+Les libellés `Article`, `Désignation de l'Article`, `Unité de mesure`,
+`Prix Unitaire (HT)` et `Prix HT` sont acceptés. Les prix doivent être finis et
+positifs ou nuls. La ligne `TOTAL` est ignorée.
 
-```text
-Fichier → Supprimer une liste...
-```
-
-Une liste s'ajoute uniquement par import (voir ci-dessus). Le **modèle `.xlsx`**
-vierge (une feuille par liste) et le rappel du format sont disponibles via :
-
-```text
-Fichier → Enregistrer un modèle Excel...
-Aide → Format Excel attendu...
-```
-
-### Remplacement des données
-
-À l'import, seule la liste concernée est remplacée ; les autres listes de la base
-sont conservées. La suppression d'une liste efface ses articles mais **conserve**
-les documents de l'historique (les lignes de document gardent une copie du code,
-de la désignation et du prix).
+- L'import **remplace** la liste concernée ; les autres listes sont conservées.
+- La suppression d'une liste efface ses articles et ses exercices, mais conserve
+  les documents de l'historique.
+- Un modèle vierge est disponible (une feuille par liste).
 
 ---
 
-## 8. Règles fonctionnelles actuelles
+## 8. Règles fonctionnelles
+
+### Exercice et plafond
+
+- Chaque convention a des exercices annuels (période configurable) et un plafond
+  par exercice ; un plafond non défini = illimité.
+- Pendant la saisie, l'application affiche en permanence : **Plafond — Consommé —
+  Ce document — Reste disponible**, avec une jauge colorée.
+- Seuils d'alerte : **vert < 80 %**, **orange ≥ 80 %**, **rouge ≥ 90 %**,
+  **rouge foncé ≥ 100 %** (constants `BUDGET_WARN`, `BUDGET_CRITICAL`,
+  `BUDGET_BLOCK` dans `app/config.py`).
+- **Blocage ferme à 100 %** : si « consommé + ce document » atteint ou dépasse le
+  plafond, l'enregistrement est **refusé** (aucune exception, aucune
+  justification). Le bouton se désactive et la base rejette l'écriture
+  (double contrôle).
+
+### Statut et clôture
+
+- Une convention est **active** (accepte des documents), **clôturée** (plus
+  aucun nouveau document) ou **expirée** (échéance dépassée : plus aucun
+  nouveau document).
+- L'écran « Conventions » liste **toutes** les conventions (sans filtre) avec
+  leur statut et leur échéance.
+- Un exercice est **actif** (saisie autorisée) ou **clôturé** (lecture seule).
+- La clôture d'un exercice archive le cumul ; l'ouverture d'un nouvel exercice
+  propose des dates glissantes (fin de l'ancien + 1 an) et un libellé suggéré.
 
 ### Prix
 
-Le prix unitaire HT provenant de la liste est la référence utilisée par l'application.
-
-Le prix n'est **pas modifiable pendant la saisie du document**.
-
-### Quantité
-
-La quantité est saisie par l'utilisateur et peut être décimale. Elle est remise
-à **1** dès que l'on choisit un autre article et après chaque ajout.
+- Le prix unitaire HT provient de la liste importée ; il est **figé** pendant
+  tout l'exercice et **non modifiable** pendant la saisie.
+- Il n'évolue que par import d'une nouvelle liste, au nouvel exercice.
 
 ### Recherche et sélection
 
-Dans la zone de recherche :
-
-- `↓` / `↑` : sélectionner l'article suivant / précédent ;
-- `Entrée` : ajouter l'article sélectionné au document.
-
-Le focus revient dans la zone de recherche après chaque ajout.
+- `↓` / `↑` : sélectionner l'article suivant / précédent ; `Entrée` : ajouter.
+- La quantité est décimale et remise à 1 après chaque ajout.
 
 ### Total
 
@@ -354,167 +318,102 @@ TVA 19 % = Total HT × 0,19
 Total TTC = Total HT + TVA
 ```
 
-La TVA de **19 %** s'applique à **toutes les listes**. Le taux et les montants
-TVA/TTC sont enregistrés avec chaque document. Aucune remise n'est calculée.
+La TVA de 19 % s'applique à toutes les conventions. Aucune remise.
+
+### Contrôle avant enregistrement
+
+- **Cohérence des prix** : si une ligne ne correspond plus à la liste active, un
+  écran propose de mettre à jour les prix / retirer les articles supprimés.
+- **Récapitulatif** : N°, date, liste, détail des lignes, HT/TVA/TTC, état du
+  plafond — l'enregistrement n'a lieu qu'après validation.
+- **Blocage plafond** : impossible de valider si le plafond est atteint.
+- Les fichiers PDF et Excel sont d'abord générés en temporaire ; document, lignes
+  et chemins sont enregistrés dans une **seule transaction** — jamais de document
+  partiel.
 
 ---
 
 ## 9. Historique
 
-Chaque document enregistré possède :
+Chaque document possède un numéro unique, une date, une convention, un exercice,
+des lignes détaillées, un total HT/TVA/TTC et des liens PDF/Excel.
 
-- un numéro automatique ;
-- une date ;
-- une catégorie ;
-- un total HT, la TVA et le total TTC ;
-- ses lignes détaillées ;
-- un lien vers le PDF et le fichier Excel générés.
+L'écran **Historique** permet de :
 
-L'onglet **Historique** permet de rechercher les documents et de :
-
-- voir leurs lignes (avec récapitulatif HT / TVA / TTC) ;
-- ouvrir le PDF associé ;
-- ouvrir le fichier Excel associé ;
-- **exporter en Excel** le document sélectionné ;
-- **supprimer le document** sélectionné (ses lignes sont supprimées, les fichiers
-  PDF/Excel restent sur le disque).
-
-La suppression d'une **liste d'articles** reste disponible via
-`Fichier → Supprimer une liste...`.
+- rechercher (texte) et **filtrer par convention et par exercice** ;
+- prévisualiser le document sélectionné (lignes + synthèse HT/TVA/TTC) ;
+- ouvrir le PDF ou l'Excel associé ;
+- exporter un document en Excel ;
+- supprimer un document (ses lignes sont supprimées, les fichiers restent sur le disque).
 
 ---
 
 ## 10. Où modifier le projet ?
 
-Pour éviter de chercher dans tout le code :
-
 | Besoin | Fichier principal |
 |---|---|
-| Modifier l'interface | `main.py` |
-| Modifier les articles / SQLite | `db.py` |
-| Modifier l'import Excel | `xlsx_importer.py` |
-| Modifier la mise en page PDF | `pdf_report.py` |
-| Modifier la mise en page Excel | `excel_report.py` |
-| Modifier la gestion des listes | `db.py` + `main.py` |
-| Modifier l'import initial | `seed_db.py` |
-| Modifier la compilation EXE | `build.bat` |
-| Modifier les dépendances | `requirements.txt` |
+| Barre latérale, en-tête, navigation, écrans | `app/ui/app.py` |
+| Tableau de bord (cartes par convention) | `app/ui/views/dashboard.py` |
+| Saisie d'un document (panier, plafond, totaux) | `app/ui/views/document.py` |
+| Historique (filtres, aperçu) | `app/ui/views/history.py` |
+| Conventions et exercices | `app/ui/views/conventions.py` + `app/ui/dialogs/conventions.py` |
+| Rapport de consommation | `app/ui/views/reports.py` + `app/reports/annual.py` |
+| Paramètres (thème, TVA) | `app/ui/views/settings.py` |
+| Couleurs / thèmes | `app/ui/theme.py` + `app/config.py` (ajout d'un thème : `THEMES`) |
+| Base de données / exercices / migration | `app/database.py` |
+| Import Excel | `app/services/importer.py` |
+| Mise en page PDF | `app/reports/pdf.py` |
+| Mise en page Excel | `app/reports/excel.py` |
+| Configuration / TVA / seuils | `app/config.py` |
+| Utilitaires (prix, dates, totaux) | `app/utils.py` |
+| Point d'entrée | `main.py` |
+| Import initial | `seed_db.py` |
+| Compilation EXE | `build.bat` |
 
 ---
 
-## 11. Améliorations possibles
+## 11. Bonnes pratiques
 
-Le projet peut évoluer progressivement sans devoir être réécrit.
-
-### Interface
-
-- améliorer le thème visuel ;
-- ajouter le logo de l'entreprise ;
-- ajouter une barre d'outils ;
-- améliorer la sélection des articles ;
-- permettre le tri des colonnes.
-
-### Documents
-
-- ajouter fournisseur/client ;
-- ajouter objet du document ;
-- ajouter référence de commande ;
-- personnaliser l'en-tête et le pied de page ;
-- ajouter signature/cachet ;
-- ajouter un modèle PDF proche d'un bon de commande ou d'une facture.
-
-### Historique
-
-- filtre par date ;
-- filtre par catégorie ;
-- export de tout l'historique en Excel ;
-- duplication d'un ancien document ;
-- suppression/annulation avec traçabilité.
-
-### Données
-
-- archivage des anciens prix ;
-- gestion des fournisseurs ;
-- gestion des unités de mesure ;
-- export d'un modèle Excel pré-rempli depuis la base ;
-- import/export de sauvegarde.
-
-### Distribution
-
-- créer un installeur Windows ;
-- ajouter une sauvegarde automatique de SQLite ;
-- séparer les données utilisateur des fichiers de programme ;
-- signer l'exécutable si le projet est diffusé largement.
-
----
-
-## 12. Bonnes pratiques pour continuer le développement
-
-1. **Ne pas modifier directement `gestion_articles.db`** avec un éditeur SQLite sans sauvegarde préalable.
+1. Ne pas modifier `gestion_articles.db` sans sauvegarde préalable.
 2. Conserver une copie de `source_listes.xlsx` avant tout nouvel import.
-3. Faire une sauvegarde du dossier `documents_pdf` et de la base avant une évolution importante.
-4. Ajouter les nouvelles fonctionnalités par petites étapes et tester après chaque modification.
-5. Ne pas stocker de données sensibles ou de mots de passe en clair dans le code.
-6. Lorsqu'une nouvelle fonctionnalité est ajoutée, mettre à jour ce README.
+3. Sauvegarder `documents_pdf` et la base avant une évolution importante.
+4. Ajouter les fonctionnalités par petites étapes, tester après chaque modification.
+5. Mettre à jour ce README à chaque nouvelle fonctionnalité.
 
 ---
 
-## 13. Feuille de route recommandée
-
-L'ordre recommandé pour les prochaines versions est :
-
-```text
-V1  → Fonctionnement de base
-V2  → Amélioration de l'interface
-V3  → PDF professionnel avec identité de l'entreprise
-V4  → Recherche/filtrage avancé de l'historique
-V5  → Sauvegarde/restauration
-V6  → Packaging et installation Windows
-```
-
-Cette progression permet d'améliorer l'application sans casser les fonctions déjà validées.
-
----
-
-## 14. Principe général du projet
+## 12. Principe général
 
 ```text
 Excel
-  ↓
-Import des articles
-  ↓
-SQLite
-  ↓
-Choix de la liste (Informatique / Bureautique / autres)
-  ↓
+  ↓  import des articles (prix figés pour l'exercice)
+SQLite (conventions, exercices, articles)
+  ↓  choix de la convention + exercice courant
 Recherche article
-  ↓
-Quantité
-  ↓
-Calcul Total HT
-  ↓
-Enregistrement du document
+  ↓  quantité
+Calcul Total HT / TVA 19 % / TTC
+  ↓  contrôle du plafond (alertes 80/90 %, blocage 100 %)
+Enregistrement transactionnel
   ↓
 Historique SQLite + PDF + Excel
 ```
 
 ---
 
-## 15. Version actuelle
+## 13. Version actuelle
 
-**Version : 1.1**
+**Version : 2.0**
 
-Fonctionnalités ajoutées depuis la 1.0 :
+Refonte majeure :
 
-- **thème moderne** : en-tête coloré, onglets en pastilles, cartes, boutons plats, tableaux soignés ;
-- sélection d'article et panier **côte à côte** (panneau redimensionnable) ;
-- **navigation clavier** dans la recherche (`↑`/`↓`, `Entrée`) et quantité remise à 1 ;
-- **TVA 19 %** pour toutes les listes (affichage, PDF, Excel, historique) et total TTC ;
-- suppression d'un **document** depuis l'onglet Historique ;
-- listes dynamiques (ajout / suppression, une feuille Excel par liste) ;
-- **numérotation par liste** avec préfixe (ex. `INF-2026-0001`, `BUR-2026-0001`) ;
-- fenêtre d'aide au **format Excel** et génération d'un **modèle** `.xlsx` ;
-- import Excel simplifié : feuille → nom de la liste ;
-- export **PDF + Excel** automatique à l'enregistrement ;
-- export Excel d'un document depuis l'historique ;
-- migration automatique de la base (catégories libres, colonne `excel_path`).
+- **exercices annuels par convention** (période configurable, ex. 15-08-2026 →
+  14-08-2027), un seul exercice actif, clôture avec archivage du cumul et reste
+  remis à zéro ;
+- **plafond par exercice** avec alertes 80 % / 90 % et **blocage ferme à 100 %**
+  (aucune justification possible) ;
+- numérotation `<préfixe>-<libellé exercice>-<séquence>` : `INF-2026-2027-0001` ;
+- **suppression** du journal d'audit et de l'historique des prix ;
+- **refonte visuelle** : barre latérale, tableau de bord, écrans Conventions /
+  Rapport / Paramètres, thème **clair moderne par défaut** + mode sombre en un clic ;
+- historique filtrable par convention et exercice ;
+- rapport de consommation par exercice (Excel), ligne TOTAL corrigée.

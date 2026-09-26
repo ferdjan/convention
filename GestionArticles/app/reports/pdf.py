@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from xml.sax.saxutils import escape
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -8,9 +10,7 @@ from reportlab.lib.enums import TA_RIGHT, TA_CENTER
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
-
-def money(value: float) -> str:
-    return f"{value:,.2f}".replace(",", " ") + " DA"
+from app.utils import money_format
 
 
 def build_pdf(
@@ -20,7 +20,7 @@ def build_pdf(
     category: str,
     items: list[dict],
     total_ht: float,
-    tva_rate: float = 0.19,
+    tva_rate: float,
     tva_amount: float | None = None,
     total_ttc: float | None = None,
 ) -> Path:
@@ -47,8 +47,11 @@ def build_pdf(
     story = []
     story.append(Paragraph("DOCUMENT DE COMMANDE", styles["DocTitle"]))
     info = [
-        [Paragraph(f"<b>N° :</b> {number}", styles["Normal"]), Paragraph(f"<b>Date :</b> {date_text}", styles["Right"])],
-        [Paragraph(f"<b>Liste :</b> {category}", styles["Normal"]), ""],
+        [
+            Paragraph(f"<b>N° :</b> {escape(str(number))}", styles["Normal"]),
+            Paragraph(f"<b>Date :</b> {escape(str(date_text))}", styles["Right"]),
+        ],
+        [Paragraph(f"<b>Liste :</b> {escape(str(category))}", styles["Normal"]), ""],
     ]
     tinfo = Table(info, colWidths=[90*mm, 85*mm])
     tinfo.setStyle(TableStyle([
@@ -59,18 +62,18 @@ def build_pdf(
     story.append(Spacer(1, 6))
 
     data = [["N°", "Désignation", "Unité", "Prix unitaire HT", "Quantité", "Total HT"]]
-    for idx, item in enumerate(items, start=1):
+    for item in items:
         data.append([
-            str(item["code"]),
-            item["designation"],
-            item["unit"],
-            money(float(item["unit_price_ht"])),
+            escape(str(item["code"])),
+            escape(str(item["designation"])),
+            escape(str(item["unit"])),
+            money_format(float(item["unit_price_ht"])),
             f"{float(item['quantity']):g}",
-            money(float(item["quantity"]) * float(item["unit_price_ht"])),
+            money_format(float(item["quantity"]) * float(item["unit_price_ht"])),
         ])
-    data.append(["", "", "", "", "TOTAL HT", money(total_ht)])
-    data.append(["", "", "", "", tva_label, money(tva_amount)])
-    data.append(["", "", "", "", "TOTAL TTC", money(total_ttc)])
+    data.append(["", "", "", "", "TOTAL HT", money_format(total_ht)])
+    data.append(["", "", "", "", tva_label, money_format(tva_amount)])
+    data.append(["", "", "", "", "TOTAL TTC", money_format(total_ttc)])
 
     table = Table(data, colWidths=[17*mm, 68*mm, 25*mm, 28*mm, 18*mm, 28*mm], repeatRows=1)
     table.setStyle(TableStyle([
@@ -90,10 +93,6 @@ def build_pdf(
         ("BOTTOMPADDING", (0,0), (-1,-1), 4),
     ]))
     story.append(table)
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("Total HT : <b>%s</b>" % money(total_ht), styles["Right"]))
-    story.append(Paragraph("%s : <b>%s</b>" % (tva_label, money(tva_amount)), styles["Right"]))
-    story.append(Paragraph("Total TTC : <b>%s</b>" % money(total_ttc), styles["Right"]))
     story.append(Spacer(1, 20))
     story.append(Paragraph("Document généré par l'application de gestion des articles.", styles["Small"]))
     doc.build(story)
