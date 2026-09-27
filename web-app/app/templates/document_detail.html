@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ doc["number"] }} — {{ APP_NAME }}{% endblock %}
+{% block page %}history{% endblock %}
+{% block heading %}Commande {{ doc["number"] }}{% endblock %}
+{% block subtitle %}{{ doc["created_at"] | when }} · {{ doc["category"] }}{% if doc["exercice_label"] %} · exercice {{ doc["exercice_label"] }}{% endif %}{% endblock %}
+{% block actions %}
+<a class="btn" href="{{ url_for('history.index', doc=doc['id']) }}">{{ icon("back") }} Historique</a>
+{% if editable %}
+<a class="btn btn-primary" href="{{ url_for('documents.edit_document', document_id=doc['id']) }}">{{ icon("edit") }} Modifier</a>
+{% endif %}
+<a class="btn" href="{{ url_for('files.document_file', document_id=doc['id'], kind='pdf') }}">{{ icon("pdf") }} PDF</a>
+<a class="btn" href="{{ url_for('files.document_file', document_id=doc['id'], kind='xlsx') }}">{{ icon("sheet") }} Excel</a>
+<a class="btn" href="{{ url_for('documents.export_document', document_id=doc['id']) }}">{{ icon("download") }} Exporter</a>
+{% endblock %}
+
+{% block content %}
+{% if not editable %}
+<div class="notice warn">{{ edit_reason }}</div>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ icon("file", "icon icon-sm") }} Lignes</h2>
+    <span class="badge">{{ items|length }} article(s)</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th scope="col">N°</th><th scope="col">Désignation</th><th scope="col" class="num">PU HT</th><th scope="col" class="num">Qté</th><th scope="col" class="num">Total HT</th></tr>
+      </thead>
+      <tbody>
+        {% for line in items %}
+        <tr>
+          <td class="mono">{{ line["code"] }}</td>
+          <td>{{ line["designation"] }}<div class="hint">{{ line["unit"] }}</div></td>
+          <td class="num">{{ line["unit_price_ht"] | money }}</td>
+          <td class="num">{{ line["quantity"] }}</td>
+          <td class="num">{{ line["total_ht"] | money }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4" class="right">Total HT</td><td class="num">{{ doc["total_ht"] | money }}</td></tr>
+        <tr><td colspan="4" class="right">TVA {{ ((doc["tva_rate"] or TVA_RATE) * 100) | round(0) | int }} %</td><td class="num">{{ doc["tva_amount"] | money }}</td></tr>
+        <tr><td colspan="4" class="right">Total TTC</td><td class="num">{{ doc["total_ttc"] | money }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+
+<section class="panel" style="margin-top:16px">
+  <div class="panel-head"><h2>{{ icon("trash", "icon icon-sm") }} Zone sensible</h2></div>
+  <div class="panel-body">
+    <form method="post" action="{{ url_for('documents.delete_document', document_id=doc['id']) }}"
+          data-confirm="Supprimer définitivement la commande {{ doc['number'] }} ?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger btn-sm" type="submit">{{ icon("trash", "icon icon-sm") }} Supprimer la commande</button>
+      <span class="hint">Les fichiers PDF/Excel déjà produits restent sur le disque.</span>
+    </form>
+  </div>
+</section>
+{% endblock %}

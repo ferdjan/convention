@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr" data-theme="clair">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}{{ APP_NAME }}{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  <script>(function(){try{var k="ga-theme",s=localStorage.getItem(k),m={nuit:"sombre",cockpit:"sombre",aube:"clair",classique:"clair"};if(m[s])s=m[s];if(s!=="clair"&&s!=="sombre"){s=(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"sombre":"clair";}document.documentElement.setAttribute("data-theme",s);}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+</head>
+<body data-page="{% block page %}dashboard{% endblock %}">
+<a class="skip-link" href="#contenu">Aller au contenu principal</a>
+{% from "_icons.html" import icon %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">
+        <span class="brand-mark">{{ icon("box", "icon") }}</span>
+        <span>{{ APP_NAME }}</span>
+      </div>
+      <div class="brand-sub">Conventions &amp; commandes — édition web</div>
+    </div>
+
+    <nav class="nav" aria-label="Navigation principale">
+      {% for key, label, href, glyph in NAV %}
+      <a href="{{ href }}" class="{{ 'active' if current_page == key }}" {% if current_page == key %}aria-current="page"{% endif %}>
+        {{ icon(glyph) }}<span>{{ label }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+
+    <div class="sidebar-foot">
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">
+        {{ icon("moon", "icon icon-theme") }}
+        <span id="theme-toggle-label">Thème sombre</span>
+      </button>
+      <div class="offline-note">Hors-ligne · aucune donnée envoyée</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1>{% block heading %}Tableau de bord{% endblock %}</h1>
+        <div class="subtitle">{% block subtitle %}Suivi des conventions et de leurs plafonds{% endblock %}</div>
+      </div>
+      <div class="topbar-actions">{% block actions %}{% endblock %}</div>
+    </header>
+
+    <main class="content" id="contenu" tabindex="-1">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flashes">
+        {% for category, message in messages %}
+        <div class="flash {{ category }}" role="status">
+          {{ icon("check" if category == "success" else ("alert" if category == "error" else "info")) }}
+          <span>{{ message }}</span>
+          <button type="button" class="icon-btn close" data-dismiss aria-label="Fermer">{{ icon("x", "icon icon-sm") }}</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<div id="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

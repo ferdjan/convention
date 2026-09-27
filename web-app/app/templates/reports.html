@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Rapport de consommation — {{ APP_NAME }}{% endblock %}
+{% block page %}reports{% endblock %}
+{% block heading %}Rapport de consommation{% endblock %}
+{% block subtitle %}Par convention : année de la convention ou année civile (date de la commande){% endblock %}
+{% block actions %}
+{% if selected %}
+<a class="btn btn-primary" href="{{ url_for('reports.download', **download_args) }}">
+  {{ icon("download") }} Télécharger le rapport Excel
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="tabs" role="tablist" aria-label="Période du rapport">
+  <a class="tab {{ 'active' if mode == 'exercice' }}" role="tab"
+     {% if mode == 'exercice' %}aria-selected="true"{% endif %}
+     href="{{ url_for('reports.index', mode='exercice') }}">Année de convention</a>
+  <a class="tab {{ 'active' if mode == 'civil' }}" role="tab"
+     {% if mode == 'civil' %}aria-selected="true"{% endif %}
+     href="{{ url_for('reports.index', mode='civil') }}">Année civile</a>
+</div>
+
+<form class="filters" method="get" action="{{ url_for('reports.index') }}">
+  <input type="hidden" name="mode" value="{{ mode }}">
+  <div class="field" style="flex:1 1 260px">
+    <label for="period-select">{{ "Exercice" if mode == "exercice" else "Année civile" }}</label>
+    <select id="period-select" name="{{ 'label' if mode == 'exercice' else 'year' }}">
+      {% for value in options %}
+      <option value="{{ value }}" {% if value == selected %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn" type="submit">{{ icon("refresh", "icon icon-sm") }} Actualiser</button>
+</form>
+
+{% if not selected %}
+<div class="empty">
+  {{ icon("chart") }}
+  <strong>{{ empty_title }}</strong>
+  <span>{{ empty_text }}</span>
+</div>
+{% else %}
+
+<div class="cards" style="margin-bottom:16px">
+  <div class="card">
+    <div class="card-label">Plafond total</div>
+    <div class="card-value">{{ totals.plafond | money_short if totals.has_plafond else "Illimité" }}</div>
+    <div class="card-foot">{{ period }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Consommé</div>
+    <div class="card-value">{{ totals.consumed | money_short }}</div>
+    <div class="card-foot">somme des totaux HT</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Reste</div>
+    <div class="card-value">{{ totals.remaining | money_short if totals.remaining is not none else "Illimité" }}</div>
+    <div class="card-foot">{{ totals.docs }} commande(s)</div>
+  </div>
+</div>
+
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("briefcase", "icon icon-sm") }} Par convention</h2>
+    <span class="badge">{{ rows|length }}</span>
+  </div>
+  {% if mode == "civil" %}
+  <div class="panel-body">
+    <div class="notice info" style="margin:0">Le plafond affiché est celui de l'exercice de
+      la convention couvrant le 1<sup>er</sup> janvier (repère uniquement : le contrôle
+      du plafond reste annuel, par exercice).</div>
+  </div>
+  {% endif %}
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Convention</th>
+          <th scope="col" class="num">Plafond{% if mode == "civil" %} de référence{% endif %}</th>
+          <th scope="col" class="num">Consommé</th>
+          <th scope="col" class="num">Reste</th>
+          <th scope="col" class="num">Taux</th>
+          <th scope="col" class="num">Commandes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.category }}</strong></td>
+          <td class="num">{{ row.plafond | money_short if row.plafond is not none else "Illimité" }}</td>
+          <td class="num">{{ row.consumed | money_short }}</td>
+          <td class="num">{{ row.remaining | money_short if row.remaining is not none else "—" }}</td>
+          <td class="num">
+            {% if row.rate is not none %}
+            <span class="badge {{ 'danger' if row.rate >= 1 else ('warn' if row.rate >= 0.8 else 'success') }}">
+              {{ row.rate | pct }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="num">{{ row.doc_count or 0 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="border:0">
+    {{ icon("list") }}
+    <strong>Aucune donnée</strong>
+    <span>Cette période ne comporte aucune convention ni commande.</span>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ icon("file", "icon icon-sm") }} Commandes de la période</h2>
+    <span class="badge">{{ documents|length }}</span>
+  </div>
+  {% if documents %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th scope="col">N°</th><th scope="col">Date</th><th scope="col">Liste</th><th scope="col" class="num">Total HT</th><th scope="col" class="num">TVA</th><th scope="col" class="num">Total TTC</th><th><span class="visually-hidden">Fichiers</span></th></tr>
+      </thead>
+      <tbody>
+        {% for doc in documents %}
+        <tr>
+          <td class="mono"><a href="{{ url_for('documents.document_detail', document_id=doc['id']) }}">{{ doc["number"] }}</a></td>
+          <td class="nowrap">{{ doc["created_at"] | day }}</td>
+          <td>{{ doc["category"] }}</td>
+          <td class="num">{{ doc["total_ht"] | money_short }}</td>
+          <td class="num">{{ doc["tva_amount"] | money_short }}</td>
+          <td class="num">{{ doc["total_ttc"] | money_short }}</td>
+          <td class="right nowrap">
+            <a class="btn btn-sm" href="{{ url_for('files.document_file', document_id=doc['id'], kind='pdf') }}">PDF</a>
+            <a class="btn btn-sm" href="{{ url_for('files.document_file', document_id=doc['id'], kind='xlsx') }}">Excel</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="border:0">
+    {{ icon("file") }}
+    <strong>Aucune commande</strong>
+    <span>Aucune commande n'a été enregistrée sur cette période.</span>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/reports.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Conventions — {{ APP_NAME }}{% endblock %}
+{% block page %}conventions{% endblock %}
+{% block heading %}Conventions et exercices{% endblock %}
+{% block subtitle %}Listes d'articles, statuts, échéances et exercices annuels{% endblock %}
+{% block actions %}
+<a class="btn" href="{{ url_for('conventions.template') }}">{{ icon("download") }} Modèle Excel</a>
+<label class="btn btn-primary" for="import-file" title="Classeur .xlsx : N°, Désignation, Unité de mesure, Prix unitaire HT">{{ icon("upload") }} Importer une liste</label>
+<input type="file" id="import-file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" form="import-form" hidden>
+{% endblock %}
+
+{% block content %}
+<form id="import-form" method="post" action="{{ url_for('conventions.import_upload') }}" enctype="multipart/form-data" hidden>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+</form>
+
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("briefcase", "icon icon-sm") }} Toutes les conventions</h2>
+    {% if not seed_imported %}
+    <form method="post" action="{{ url_for('conventions.import_seed') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm" type="submit">{{ icon("box", "icon icon-sm") }} Importer source_listes.xlsx</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Convention</th>
+          <th scope="col">Préfixe</th>
+          <th scope="col">Statut</th>
+          <th scope="col">Échéance</th>
+          <th scope="col">Exercice actif</th>
+          <th scope="col" class="num">Plafond</th>
+          <th scope="col" class="num">Consommé</th>
+          <th scope="col" class="num">Reste</th>
+          <th scope="col" class="num">Articles</th>
+          <th scope="col" class="num">Commandes</th>
+          <th><span class="visually-hidden">Gérer</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in rows %}
+        {% set cat = entry.row %}
+        <tr class="clickable {{ 'selected' if entry.row.name == selected }}">
+          <td><strong><a href="{{ url_for('conventions.detail', cat_id=cat.id) }}">{{ cat.name }}</a></strong></td>
+          <td class="mono">{{ cat.prefix or "—" }}</td>
+          <td>
+            <span class="badge {{ STATUS_BADGE[entry.status] }}">
+              {{ STATUS_LABEL[entry.status] }}
+            </span>
+          </td>
+          <td class="nowrap">{{ cat.expiry_date | day if cat.expiry_date else "—" }}</td>
+          <td>{{ entry.exercice.label if entry.exercice else "—" }}</td>
+          <td class="num">{{ entry.summary.plafond | money_short if entry.summary and entry.summary.plafond is not none else ("Illimité" if entry.summary else "—") }}</td>
+          <td class="num">{{ entry.summary.consumed | money_short if entry.summary else "—" }}</td>
+          <td class="num">{{ entry.summary.remaining | money_short if entry.summary and entry.summary.remaining is not none else "—" }}</td>
+          <td class="num">{{ entry.articles }}</td>
+          <td class="num">{{ entry.documents }}</td>
+          <td class="right">
+            <a class="btn btn-sm" href="{{ url_for('conventions.index', category=cat.name) }}">Gérer</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="border:0">
+    {{ icon("briefcase") }}
+    <strong>Aucune convention</strong>
+    <span>Importez un classeur Excel pour créer vos listes.</span>
+  </div>
+  {% endif %}
+</section>
+
+{% if selected and current %}
+<section class="panel"
+         id="exercices-panel"
+         data-create-url="{{ url_for('conventions.create_exercice', cat_id=current.row.id) }}"
+         data-suggest-start="{{ today }}">
+  <div class="panel-head">
+    <h2>{{ icon("list", "icon icon-sm") }} Exercices — {{ selected }}</h2>
+    <div class="flex">
+      <button class="btn btn-primary btn-sm" type="button" id="new-exercice-btn">
+        {{ icon("plus", "icon icon-sm") }} Ouvrir un exercice
+      </button>
+      <button class="btn btn-danger btn-sm" type="button" id="delete-list-btn">
+        {{ icon("trash", "icon icon-sm") }} Supprimer la liste
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-body" style="display:flex; flex-direction:column; gap:18px">
+    {# ------------------------------------------------------- statut #}
+    <form method="post" action="{{ url_for('conventions.set_status', cat_id=current.row.id) }}" class="row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field">
+        <label for="st-status">Statut</label>
+        <select id="st-status" name="status">
+          <option value="active" {% if current.row.status == "active" %}selected{% endif %}>Actif (saisie autorisée)</option>
+          <option value="closed" {% if current.row.status == "closed" %}selected{% endif %}>Clôturé (lecture seule)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="st-expiry">Échéance (facultative)</label>
+        <input type="date" id="st-expiry" name="expiry_date" value="{{ current.row.expiry_date or '' }}">
+      </div>
+      <button class="btn" type="submit">{{ icon("check", "icon icon-sm") }} Appliquer</button>
+      <span class="hint">Statut affiché : <strong>{{ STATUS_LABEL[current_status] }}</strong>
+        {% if current_status == "expiree" %}(échéance dépassée){% endif %}</span>
+    </form>
+
+    {# ---------------------------------------------------- exercices #}
+    {% if exercices %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Libellé</th>
+            <th scope="col">Période</th>
+            <th scope="col" class="num">Plafond</th>
+            <th scope="col">Statut</th>
+            <th scope="col" class="num">Consommé</th>
+            <th scope="col" class="num">Reste</th>
+            <th scope="col">Clôturé le</th>
+            <th><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ex in exercices %}
+          <tr>
+            <td><strong>{{ ex.label }}</strong></td>
+            <td class="nowrap">{{ ex.start_date | day }} → {{ ex.end_date | day }}</td>
+            <td class="num">{{ ex.plafond | money_short if ex.plafond is not none else "Illimité" }}</td>
+            <td>
+              <span class="badge {{ 'success' if ex.status == 'active' else 'none' }}">
+                {{ "Actif" if ex.status == "active" else "Clôturé" }}
+              </span>
+            </td>
+            {% if ex.status == "closed" %}
+            <td class="num">{{ ex.consumed_at_close | money_short }}</td>
+            <td class="num">{{ ex.remaining_at_close | money_short if ex.remaining_at_close is not none else "—" }}</td>
+            {% else %}
+            <td class="num">{{ live_consumed.get(ex.label, 0) | money_short }}</td>
+            <td class="num">{{ live_remaining.get(ex.label) | money_short if live_remaining.get(ex.label) is not none else "—" }}</td>
+            {% endif %}
+            <td class="nowrap">{{ ex.closed_at | when if ex.closed_at else "—" }}</td>
+            <td class="right nowrap">
+              {% if ex.status == "active" %}
+              <form method="post" style="display:inline"
+                    action="{{ url_for('conventions.close_exercice', ex_id=ex.id) }}"
+                    data-confirm="Clôturer l'exercice {{ ex.label }} ? Le cumul est archivé et le suivant repartira de zéro.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-sm" type="submit">Clôturer</button>
+              </form>
+              {% endif %}
+              <button class="btn btn-sm" type="button" data-edit-exercice
+                      data-id="{{ ex.id }}"
+                      data-url="{{ url_for('conventions.update_exercice', ex_id=ex.id) }}"
+                      data-label="{{ ex.label }}"
+                      data-start="{{ ex.start_date }}"
+                      data-end="{{ ex.end_date }}"
+                      data-plafond="{{ ex.plafond if ex.plafond is not none else '' }}"
+                      data-status="{{ ex.status }}">
+                {{ icon("edit", "icon icon-sm") }} Éditer
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="notice warn">Aucun exercice : ouvrez le premier exercice (période + plafond)
+      pour pouvoir saisir des commandes.</div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{# ------------------------------------------------------------ dialogues #}
+<dialog id="exercice-dialog">
+  <form method="post" id="exercice-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="action-url" id="exercice-action-url"
+           value="{{ url_for('conventions.create_exercice', cat_id=current.row.id) if current else '' }}">
+    <div class="dialog-head">
+      <h3 id="exercice-dialog-title">Ouvrir un exercice</h3>
+      <button type="button" class="icon-btn" data-close aria-label="Fermer">{{ icon("x") }}</button>
+    </div>
+    <div class="dialog-body">
+      <div class="field" id="label-field">
+        <label for="ex-label">Libellé</label>
+        <input type="text" id="ex-label" name="label" placeholder="2026-2027" required>
+        <span class="hint">Suggestion automatique à partir de la période.</span>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="ex-start">Début</label>
+          <input type="date" id="ex-start" name="start_date" required>
+        </div>
+        <div class="field">
+          <label for="ex-end">Fin</label>
+          <input type="date" id="ex-end" name="end_date" required>
+        </div>
+        <div class="field">
+          <label for="ex-plafond">Plafond (DA)</label>
+          <input type="text" id="ex-plafond" name="plafond" inputmode="decimal" placeholder="illimité">
+        </div>
+      </div>
+      <label class="flex hint" id="close-current-wrap">
+        <input type="checkbox" name="close_current" style="width:auto"> Clôturer l'exercice actif en même temps
+      </label>
+      <div class="notice info" id="edit-notice" hidden>
+        L'exercice <strong id="edit-label-out"></strong> : dates et plafond.
+        Pour un exercice clôturé, le plafond recalcule l'instantané archivé.
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button type="submit" class="btn btn-primary">{{ icon("check") }} Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="delete-dialog">
+  <form method="post" action="{{ url_for('conventions.delete_list', cat_id=current.row.id) if current else '' }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="dialog-head">
+      <h3>Supprimer la liste « {{ selected }} »</h3>
+      <button type="button" class="icon-btn" data-close aria-label="Fermer">{{ icon("x") }}</button>
+    </div>
+    <div class="dialog-body">
+      <div class="notice block">Les articles et les exercices de cette convention seront
+        supprimés. Les commandes de l'historique sont conservées.</div>
+      <div class="field">
+        <label for="confirm-name">Saisissez « {{ selected }} » pour confirmer</label>
+        <input type="text" id="confirm-name" name="confirm" autocomplete="off" required>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button type="submit" class="btn btn-danger">{{ icon("trash") }} Supprimer définitivement</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/conventions.js') }}"></script>
+{% endblock %}

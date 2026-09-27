@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Paramètres — {{ APP_NAME }}{% endblock %}
+{% block page %}settings{% endblock %}
+{% block heading %}Paramètres{% endblock %}
+{% block subtitle %}Apparence, sauvegarde et informations de la base{% endblock %}
+{% block actions %}
+<a class="btn btn-primary" href="{{ url_for('settings.backup') }}">{{ icon("download") }} Sauvegarde de la base</a>
+{% endblock %}
+
+{% block content %}
+<div class="cards" style="margin-bottom:16px">
+  <div class="card"><div class="card-label">Conventions</div>
+    <div class="card-value">{{ counts.categories }}</div><div class="card-foot">listes d'articles</div></div>
+  <div class="card"><div class="card-label">Exercices</div>
+    <div class="card-value">{{ counts.exercices }}</div><div class="card-foot">périodes budgétaires</div></div>
+  <div class="card"><div class="card-label">Articles</div>
+    <div class="card-value">{{ counts.articles }}</div><div class="card-foot">prix figés</div></div>
+  <div class="card"><div class="card-label">Commandes</div>
+    <div class="card-value">{{ counts.documents }}</div><div class="card-foot">historique</div></div>
+</div>
+
+<section class="panel mb">
+  <div class="panel-head"><h2>{{ icon("gear", "icon icon-sm") }} Apparence</h2></div>
+  <div class="panel-body">
+    <div class="field">
+      <label>Thème</label>
+      <div class="theme-grid" id="theme-grid">
+        {% for key, theme in THEMES.items() %}
+        <button type="button" class="theme-chip" data-theme-set="{{ key }}"
+                aria-label="Appliquer le thème {{ theme.label }}">
+          <span class="swatch" style="background: {{ theme.colors.primary }}"></span>
+          <span class="swatch" style="background: {{ theme.colors.accent }}"></span>
+          <span class="swatch" style="background: {{ theme.colors.bg }}"></span>
+          <span class="theme-name">{{ theme.label }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      <span class="hint">Le thème est mémorisé dans ce navigateur (aucune donnée envoyée).</span>
+    </div>
+  </div>
+</section>
+
+<section class="panel mb">
+  <div class="panel-head"><h2>{{ icon("list", "icon icon-sm") }} Données</h2></div>
+  <div class="panel-body">
+    <table class="kv">
+      <tr><th>Base de données</th><td class="mono">{{ db_name }} <span class="hint">(schéma v{{ schema_version }})</span></td></tr>
+      <tr><th>Dossier des commandes</th><td class="mono">{{ export_dir }}</td></tr>
+      <tr><th>Taux de TVA</th><td>{{ (TVA_RATE * 100) | round(0) | int }} %</td></tr>
+      <tr><th>Classeur source</th>
+        <td>
+          {% if seed %}<span class="mono">{{ seed.name }}</span>
+          <span class="hint">— importable en un clic</span>
+          {% else %}<span class="hint">introuvable</span>{% endif %}
+        </td></tr>
+      <tr><th>Mode</th><td>Hors-ligne · serveur local 127.0.0.1 · aucune connexion externe</td></tr>
+    </table>
+    <div class="flex" style="margin-top:14px">
+      {% if seed %}
+      <form method="post" action="{{ url_for('conventions.import_seed') }}"
+            data-confirm="Réimporter le classeur source ? Les listes existantes seront remplacées.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn" type="submit">{{ icon("upload", "icon icon-sm") }} Importer source_listes.xlsx</button>
+      </form>
+      {% endif %}
+      <a class="btn" href="{{ url_for('conventions.template') }}">{{ icon("download", "icon icon-sm") }} Modèle Excel vierge</a>
+      <span class="spacer"></span>
+      <a class="btn btn-primary" href="{{ url_for('settings.backup') }}">{{ icon("box", "icon icon-sm") }} Télécharger une sauvegarde</a>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ icon("info", "icon icon-sm") }} À propos</h2></div>
+  <div class="panel-body">
+    <p class="hint" style="margin:0">
+      {{ APP_NAME }} — {{ APP_SUBTITLE }}, version {{ VERSION }}.
+      Application monoposte, sans compte ni mot de passe : l'accès est limité à cette machine
+      et aucune donnée n'est transmise à l'extérieur. La sauvegarde téléchargée est une copie
+      SQLite cohérente du fichier de base.
+    </p>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

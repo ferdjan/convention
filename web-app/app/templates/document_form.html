@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+
+{% block title %}{{ "Nouvelle commande" if mode == "new" else "Modifier " ~ doc["number"] }} — {{ APP_NAME }}{% endblock %}
+{% block page %}documents{% endblock %}
+{% block heading %}{{ "Nouvelle commande" if mode == "new" else "Modifier la commande" }}{% endblock %}
+{% block subtitle %}
+{%- if mode == "new" -%}
+Convention, articles, puis vérification avant enregistrement (PDF + Excel + historique)
+{%- else -%}
+{{ doc["number"] }} · {{ doc["category"] }} · exercice {{ doc["exercice_label"] }}
+{%- endif -%}
+{% endblock %}
+{% block actions %}
+{% if mode == "edit" %}
+<a class="btn" href="{{ url_for('documents.document_detail', document_id=doc["id"]) }}">{{ icon("back") }} Retour</a>
+{% else %}
+<a class="btn" href="{{ url_for('history.index') }}">{{ icon("clock") }} Historique</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if mode == "new" and not categories %}
+<div class="empty">
+  {{ icon("briefcase") }}
+  <strong>Aucune convention saisissable</strong>
+  <p>Ouvrez un exercice actif (ou réactivez une convention) depuis
+     <a href="{{ url_for('conventions.index') }}">Conventions</a>.</p>
+</div>
+{% else %}
+<ol class="steps" aria-label="Étapes de saisie">
+  <li data-step-nav="1"><span class="step-num" aria-hidden="true">1</span><span>Convention</span></li>
+  <li data-step-nav="2"><span class="step-num" aria-hidden="true">2</span><span>Articles</span></li>
+  <li data-step-nav="3"><span class="step-num" aria-hidden="true">3</span><span>Récapitulatif</span></li>
+</ol>
+
+<div id="document-app"
+     data-mode="{{ mode }}"
+     data-preview-url="{{ preview_url }}"
+     data-save-url="{{ save_url }}"
+     data-articles-url="{{ url_for('api.articles') }}"
+     data-budget-url="{{ url_for('api.budget') }}"
+     data-history-url="{{ url_for('history.index') }}"
+     data-detail-url="{{ url_for('documents.document_detail', document_id=doc["id"]) if mode == "edit" else '' }}"
+     data-csrf="{{ csrf_token }}"
+     data-exclude="{{ exclude_id or '' }}"
+     data-number="{{ doc["number"] if doc else '' }}"
+     data-category="{{ selected }}"
+     data-initial-cart="{{ initial_cart }}">
+
+  {# ------------------------------------------------------- étape 1 #}
+  <section data-step-panel="1" aria-label="Étape 1 — convention">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>{{ icon("briefcase", "icon icon-sm") }} 1 — Choisir la convention</h2>
+        {% if mode == "edit" %}<span class="badge">Convention figée</span>{% endif %}
+      </div>
+      <div class="panel-body" style="display: flex; flex-direction: column; gap: 14px">
+        {% if mode == "edit" %}
+        <div class="notice info" style="margin:0">En modification, la convention ne peut pas
+          changer : <strong>{{ selected }}</strong>
+          {% if doc.exercice_label %}· exercice {{ doc.exercice_label }}{% endif %}.</div>
+        {% else %}
+        <div class="convention-pick" role="radiogroup" aria-label="Convention de la commande">
+          {% for c in categories %}
+          <label class="pick-card {{ 'is-disabled' if not c.exercice }}">
+            <input type="radio" name="convention" value="{{ c.name }}"
+                   {% if c.name == selected and c.exercice %}checked{% endif %}
+                   {% if not c.exercice %}disabled{% endif %}>
+            <span class="pick-name">{{ c.name }}</span>
+            {% if c.exercice %}
+            <span class="badge {{ c.budget.state if c.budget else 'none' }}">
+              Exercice {{ c.exercice }} ·
+              {{ {"ok": "sain", "warn": "alerte 80 %", "critical": "critique 90 %",
+                  "over": "plafond atteint", "none": "sans plafond"}[c.budget.state if c.budget else "none"] }}
+            </span>
+            <span class="hint">{{ c.articles }} article(s)
+              {% if c.budget and c.budget.plafond is not none %}
+              · plafond {{ c.budget.plafond | money_short }}
+              · consommé {{ c.budget.consumed | money_short }}
+              {% else %}· sans plafond{% endif %}</span>
+            {% else %}
+            <span class="badge warn">Aucun exercice actif</span>
+            <span class="hint">{{ c.articles }} article(s) ·
+              <a href="{{ url_for('conventions.index', category=c.name) }}">ouvrir un exercice</a></span>
+            {% endif %}
+          </label>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div id="step1-notice"></div>
+      </div>
+      <div class="panel-foot wizard-nav">
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-primary" id="to-step2">
+          Continuer {{ icon("back", "icon icon-sm flip-x") }}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ------------------------------------------------------- étape 2 #}
+  <section data-step-panel="2" aria-label="Étape 2 — articles" hidden>
+    <div class="doc-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>{{ icon("list", "icon icon-sm") }} Catalogue</h2>
+          <div class="flex" style="gap: 8px; align-items: center">
+            <strong id="current-category-name">{{ selected }}</strong>
+            {% if mode == "new" %}
+            <button type="button" class="btn btn-sm btn-ghost" id="change-category">Changer</button>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="panel-body" style="display: flex; flex-direction: column; gap: 14px">
+          <div class="search-box">
+            {{ icon("search", "icon icon-sm") }}
+            <input type="search" id="article-search" autocomplete="off"
+                   placeholder="Rechercher par N°, désignation ou unité…"
+                   aria-label="Rechercher un article">
+          </div>
+
+          <div class="results" id="article-results" role="listbox" aria-label="Résultats"></div>
+
+          <div class="hint flex">
+            <span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span>
+            <span><kbd>Entrée</kbd> ou <kbd>+</kbd> ajouter</span>
+            <span id="result-count"></span>
+          </div>
+
+          <div class="field" style="max-width: 220px">
+            <label for="qty">Quantité à ajouter</label>
+            <input type="text" id="qty" value="1" inputmode="decimal" autocomplete="off">
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>{{ icon("file", "icon icon-sm") }}
+            {{ "Commande en cours" if mode == "new" else "Lignes de la commande" }}
+          </h2>
+          <span class="badge" id="line-count">0 ligne</span>
+        </div>
+
+        <div class="panel-body" style="display: flex; flex-direction: column; gap: 16px">
+          <div id="budget-block">
+            <div class="flex-between" style="margin-bottom: 8px">
+              <strong style="font-size: 13.5px">Plafond de l'exercice</strong>
+              <span class="badge none" id="budget-state">—</span>
+            </div>
+            <div class="gauge" id="budget-gauge" data-state="none" role="img" aria-label="Plafond de l'exercice">
+              <span style="width: 0%"></span>
+              <div class="gauge-marks"><i style="left: 80%"></i><i style="left: 90%"></i></div>
+            </div>
+            <div class="budget-rows mt" id="budget-rows">
+              <div class="budget-row"><span>Plafond</span><strong id="b-plafond">—</strong></div>
+              <div class="budget-row"><span>Consommé</span><strong id="b-consumed">—</strong></div>
+              <div class="budget-row big"><span>Cette commande</span><strong id="b-document">—</strong></div>
+              <div class="budget-row big"><span>Reste disponible</span><strong id="b-remaining">—</strong></div>
+            </div>
+            <div id="budget-notice" style="margin-top: 10px"></div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table cart-table">
+              <thead>
+                <tr>
+                  <th scope="col">N°</th>
+                  <th scope="col">Désignation</th>
+                  <th scope="col" class="num">PU HT</th>
+                  <th scope="col" class="num">Qté</th>
+                  <th scope="col" class="num">Total HT</th>
+                  <th><span class="visually-hidden">Retirer</span></th>
+                </tr>
+              </thead>
+              <tbody id="cart-body"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="4" class="right">Total HT</td>
+                  <td class="num" id="t-ht">0,00</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="4" class="right">TVA {{ (TVA_RATE * 100) | round(0) | int }} %</td>
+                  <td class="num" id="t-tva">0,00</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="4" class="right">Total TTC</td>
+                  <td class="num" id="t-ttc">0,00</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div id="form-notice"></div>
+
+          <div class="wizard-nav">
+            {% if mode == "new" %}
+            <button type="button" class="btn" id="back-to-1">{{ icon("back", "icon icon-sm") }} Convention</button>
+            {% endif %}
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="clear-btn">{{ icon("trash") }} Vider</button>
+            <button type="button" class="btn btn-primary" id="save-btn">
+              {{ icon("check") }} Vérifier la commande
+            </button>
+          </div>
+          <span class="hint" id="save-hint"></span>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  {# ------------------------------------------------------- étape 3 #}
+  <section data-step-panel="3" aria-label="Étape 3 — récapitulatif" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>{{ icon("check", "icon icon-sm") }} 3 — Vérifier et enregistrer</h2>
+        <span class="badge" id="recap-number">—</span>
+      </div>
+      <div class="panel-body" id="recap-body" style="display: flex; flex-direction: column; gap: 14px"></div>
+      <div class="panel-foot wizard-nav">
+        <button type="button" class="btn" id="back-to-2">{{ icon("back", "icon icon-sm") }} Modifier le panier</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-primary" id="confirm-btn">{{ icon("check") }} Confirmer et enregistrer la commande</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+{# ---------------------------------------------------------- prix modifiés #}
+<dialog id="price-dialog" aria-labelledby="price-title">
+  <div class="dialog-head">
+    <h3 id="price-title">Les prix ont changé</h3>
+    <button type="button" class="icon-btn" data-close aria-label="Fermer">{{ icon("x") }}</button>
+  </div>
+  <div class="dialog-body" id="price-body"></div>
+  <div class="dialog-foot">
+    <button type="button" class="btn" data-close>Annuler</button>
+    <button type="button" class="btn btn-primary" id="price-accept">Utiliser les prix à jour</button>
+  </div>
+</dialog>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if mode == "new" or mode == "edit" %}
+<script src="{{ url_for('static', filename='js/document.js') }}"></script>
+{% endif %}
+{% endblock %}

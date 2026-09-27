@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Historique — {{ APP_NAME }}{% endblock %}
+{% block page %}history{% endblock %}
+{% block heading %}Historique des commandes{% endblock %}
+{% block subtitle %}{{ documents|length }} commande(s) affichée(s) sur {{ total }}{% endblock %}
+{% block actions %}
+<a class="btn" href="{{ url_for('conventions.index') }}">{{ icon("briefcase") }} Conventions</a>
+<a class="btn btn-primary" href="{{ url_for('documents.new_document') }}">{{ icon("file-plus") }} Nouvelle commande</a>
+{% endblock %}
+
+{% block content %}
+<form class="filters" method="get" action="{{ url_for('history.index') }}" id="history-filters">
+  <div class="field" style="flex: 2 1 260px">
+    <label for="q">Recherche</label>
+    <div class="search-box">
+      {{ icon("search", "icon icon-sm") }}
+      <input type="search" id="q" name="text" value="{{ filters.text }}"
+              placeholder="N° de commande, liste ou date…" autocomplete="off">
+    </div>
+  </div>
+  <div class="field">
+    <label for="f-category">Convention</label>
+    <select id="f-category" name="category">
+      <option value="">Toutes</option>
+      {% for name in categories %}
+      <option value="{{ name }}" {% if filters.category == name %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-exercice">Exercice</label>
+    <select id="f-exercice" name="exercice">
+      <option value="">Tous</option>
+      {% for label in exercices %}
+      <option value="{{ label }}" {% if filters.exercice == label %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn" type="submit">{{ icon("refresh", "icon icon-sm") }} Actualiser</button>
+  {% if filters.text or filters.category or filters.exercice %}
+  <a class="btn btn-ghost" href="{{ url_for('history.index') }}">Réinitialiser</a>
+  {% endif %}
+</form>
+
+<div class="grid-split">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ icon("clock", "icon icon-sm") }} Commandes</h2>
+      <span class="badge">{{ documents|length }}</span>
+    </div>
+    {% if documents %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">N°</th>
+            <th scope="col">Date</th>
+            <th scope="col">Liste</th>
+            <th scope="col">Exercice</th>
+            <th scope="col" class="num">Total HT</th>
+            <th scope="col" class="num">Total TTC</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for doc in documents %}
+          <tr class="clickable {{ 'selected' if preview and preview.doc.id == doc.id }}">
+            <td class="mono"><a href="{{ url_for('history.index', text=filters.text, category=filters.category, exercice=filters.exercice, doc=doc.id) }}">{{ doc.number }}</a></td>
+            <td class="nowrap">{{ doc.created_at | day }}</td>
+            <td><a href="{{ url_for('history.index', text=filters.text, category=doc.category, exercice=filters.exercice) }}" title="Filtrer sur {{ doc.category }}">{{ doc.category }}</a></td>
+            <td>{{ doc.exercice_label or "—" }}</td>
+            <td class="num">{{ doc.total_ht | money_short }}</td>
+            <td class="num">{{ doc.total_ttc | money_short }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty" style="border:0">
+      {{ icon("file") }}
+      <strong>Aucune commande</strong>
+      <span>Modifiez les filtres ou créez une commande.</span>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ icon("file", "icon icon-sm") }} Aperçu</h2>
+      {% if preview %}
+      <span class="badge success">{{ "Modifiable" if preview.editable else "Lecture seule" }}</span>
+      {% endif %}
+    </div>
+
+    {% if preview %}
+    <div class="panel-body" style="display:flex; flex-direction:column; gap:16px">
+      <div class="flex-between">
+        <div>
+          <div style="font-size:17px;font-weight:700" class="mono">{{ preview.doc.number }}</div>
+          <div class="hint">{{ preview.doc.created_at | when }} · {{ preview.doc.category }}
+            {% if preview.doc.exercice_label %} · exercice {{ preview.doc.exercice_label }}{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th scope="col">N°</th><th scope="col">Désignation</th><th scope="col" class="num">PU</th><th scope="col" class="num">Qté</th><th scope="col" class="num">Total</th></tr>
+          </thead>
+          <tbody>
+            {% for line in preview["items"] %}
+            <tr>
+              <td class="mono">{{ line.code }}</td>
+              <td>{{ line.designation }}<div class="hint">{{ line.unit }}</div></td>
+              <td class="num">{{ line.unit_price_ht | money_short }}</td>
+              <td class="num">{{ line.quantity }}</td>
+              <td class="num">{{ line.total_ht | money_short }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr><td colspan="4" class="right">Total HT</td><td class="num">{{ preview.doc.total_ht | money_short }}</td></tr>
+            <tr><td colspan="4" class="right">TVA {{ (preview.doc.tva_rate * 100) | round(0) | int }} %</td><td class="num">{{ preview.doc.tva_amount | money_short }}</td></tr>
+            <tr><td colspan="4" class="right">Total TTC</td><td class="num">{{ preview.doc.total_ttc | money_short }}</td></tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {% if not preview.editable %}
+      <div class="notice warn">{{ preview.edit_reason }}</div>
+      {% endif %}
+
+      <div class="flex">
+        {% if preview.editable %}
+        <a class="btn btn-primary btn-sm" href="{{ url_for('documents.edit_document', document_id=preview.doc.id) }}">
+          {{ icon("edit", "icon icon-sm") }} Modifier
+        </a>
+        {% else %}
+        <button class="btn btn-sm" disabled title="{{ preview.edit_reason }}">{{ icon("lock", "icon icon-sm") }} Modifier</button>
+        {% endif %}
+        <a class="btn btn-sm" href="{{ url_for('files.document_file', document_id=preview.doc.id, kind='pdf') }}">
+          {{ icon("pdf", "icon icon-sm") }} PDF
+        </a>
+        <a class="btn btn-sm" href="{{ url_for('files.document_file', document_id=preview.doc.id, kind='xlsx') }}">
+          {{ icon("sheet", "icon icon-sm") }} Excel
+        </a>
+        <a class="btn btn-sm" href="{{ url_for('documents.export_document', document_id=preview.doc.id) }}">
+          {{ icon("download", "icon icon-sm") }} Exporter
+        </a>
+        <span class="spacer"></span>
+        <form method="post" action="{{ url_for('documents.delete_document', document_id=preview.doc.id) }}"
+              data-confirm="Supprimer définitivement la commande {{ preview.doc.number }} ? (les fichiers restent sur le disque)">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-danger btn-sm" type="submit">{{ icon("trash", "icon icon-sm") }} Supprimer</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty" style="border:0">
+      {{ icon("list") }}
+      <strong>Aucune commande sélectionnée</strong>
+      <span>Cliquez sur un numéro de commande pour afficher son détail.</span>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
+{% endblock %}

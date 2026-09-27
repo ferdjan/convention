@@ -1,0 +1,72 @@
+/* Fichier généré par tools/gen_themes.py — ne pas éditer à la main. */
+:root {
+  color-scheme: light;
+}
+
+
+[data-theme="clair"],
+:root
+ {
+  --c-primary: #1E3A8A;
+  --c-primary-dark: #172554;
+  --c-bg: #F4F6FB;
+  --c-surface: #FFFFFF;
+  --c-card: #FFFFFF;
+  --c-stripe: #EEF2F9;
+  --c-text: #1A2233;
+  --c-muted: #5B6472;
+  --c-border: #E2E8F0;
+  --c-border-strong: #CBD5E1;
+  --c-accent: #2563EB;
+  --c-accent-hover: #1D4ED8;
+  --c-accent-light: #DBEAFE;
+  --c-on-accent: #FFFFFF;
+  --c-on-primary: #FFFFFF;
+  --c-on-primary-muted: #BFDBFE;
+  --c-success: #16A34A;
+  --c-warn: #D97706;
+  --c-danger: #DC2626;
+  --c-sidebar: #1E3A8A;
+  --c-sidebar-hover: #1E40AF;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 8px 24px rgba(15, 23, 42, .06);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, .18);
+  --b-ok: #047857;
+  --b-warn: #B45309;
+  --b-critical: #C2410C;
+  --b-over: #B91C1C;
+  --b-none: #6B7280;
+  color-scheme: light;
+}
+
+[data-theme="sombre"]
+ {
+  --c-primary: #020617;
+  --c-primary-dark: #000000;
+  --c-bg: #0F172A;
+  --c-surface: #1E293B;
+  --c-card: #1E293B;
+  --c-stripe: #29374D;
+  --c-text: #E2E8F0;
+  --c-muted: #94A3B8;
+  --c-border: #334155;
+  --c-border-strong: #475569;
+  --c-accent: #38BDF8;
+  --c-accent-hover: #0EA5E9;
+  --c-accent-light: #075985;
+  --c-on-accent: #0B1220;
+  --c-on-primary: #FFFFFF;
+  --c-on-primary-muted: #94A3B8;
+  --c-success: #34D399;
+  --c-warn: #FBBF24;
+  --c-danger: #F87171;
+  --c-sidebar: #020617;
+  --c-sidebar-hover: #273449;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 8px 24px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, .5);
+  --b-ok: #34D399;
+  --b-warn: #FBBF24;
+  --b-critical: #FB923C;
+  --b-over: #F87171;
+  --b-none: #94A3B8;
+  color-scheme: dark;
+}

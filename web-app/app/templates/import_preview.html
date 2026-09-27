@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Importer une liste — {{ APP_NAME }}{% endblock %}
+{% block page %}conventions{% endblock %}
+{% block heading %}Import Excel — prévisualisation{% endblock %}
+{% block subtitle %}{{ filename }} · {{ suggestions|length }} feuille(s) détectée(s){% endblock %}
+{% block actions %}
+<a class="btn" href="{{ url_for('conventions.index') }}">{{ icon("back") }} Annuler</a>
+{% endblock %}
+
+{% block content %}
+<div class="notice info">
+  Cochez les feuilles à importer et précisez la convention de destination.
+  Une feuille vers une convention existante <strong>remplace entièrement</strong> sa liste
+  d'articles ; une feuille vers une convention inconnue <strong>crée</strong> une nouvelle liste.
+  Les prix sont figés pour l'exercice en cours.
+</div>
+
+<form method="post" action="{{ url_for('conventions.import_commit') }}" class="panel" id="import-commit">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="panel-head">
+    <h2>{{ icon("sheet", "icon icon-sm") }} Feuilles du classeur</h2>
+    <div class="flex">
+      <button class="btn btn-sm" type="button" id="check-all">Tout cocher</button>
+      <button class="btn btn-sm" type="button" id="check-none">Tout décocher</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col" style="width:44px">Importer</th>
+          <th scope="col">Feuille</th>
+          <th scope="col">Convention de destination</th>
+          <th scope="col">Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in suggestions %}
+        {% set i = loop.index0 %}
+        <tr>
+          <td>
+            <input type="checkbox" name="selected" value="{{ i }}" checked
+                   aria-label="Importer {{ item.sheet }}">
+            <input type="hidden" name="sheet_{{ i }}" value="{{ item.sheet }}">
+          </td>
+          <td><strong>{{ item.sheet }}</strong></td>
+          <td>
+            <input type="text" name="target_{{ i }}" value="{{ item.target }}"
+                   list="category-list" placeholder="Nom de la convention" autocomplete="off">
+          </td>
+          <td>
+            {% if item.target and item.exists %}
+            <span class="badge warn">Remplace « {{ item.target }} »</span>
+            {% elif item.target %}
+            <span class="badge success">Nouvelle liste</span>
+            {% else %}
+            <span class="badge danger">Destination vide</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <datalist id="category-list">
+    {% for name in categories %}
+    <option value="{{ name }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <div class="panel-body flex">
+    <span class="hint">Les destinations vides sont ignorées lors de l'import.</span>
+    <span class="spacer"></span>
+    <a class="btn" href="{{ url_for('conventions.index') }}">Annuler</a>
+    <button class="btn btn-primary" type="submit">{{ icon("check") }} Importer la sélection</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/import_preview.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Tableau de bord — {{ APP_NAME }}{% endblock %}
+{% block page %}dashboard{% endblock %}
+{% block heading %}Tableau de bord{% endblock %}
+{% block subtitle %}Suivi des conventions : exercices en cours, plafonds et alertes{% endblock %}
+{% block actions %}
+<a class="btn btn-primary" href="{{ url_for('documents.new_document') }}">{{ icon("file-plus") }} Nouvelle commande</a>
+{% endblock %}
+
+{% block content %}
+<section class="stats mb" aria-label="Chiffres clés">
+  <div class="stat">
+    <div class="stat-label">Conventions suivies</div>
+    <div class="stat-value">{{ stats.categories }}<span class="muted" style="font-size:15px"> / {{ stats.categories_total }}</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Plafond cumulé</div>
+    <div class="stat-value small">{{ stats.plafond | money_short if stats.plafond is not none else "Illimité" }}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Consommé (exercices en cours)</div>
+    <div class="stat-value small">{{ stats.consumed | money_short }}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Reste disponible</div>
+    <div class="stat-value small">{{ stats.remaining | money_short if stats.remaining is not none else "—" }}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Commandes</div>
+    <div class="stat-value">{{ stats.documents }}</div>
+  </div>
+</section>
+
+{% if active %}
+<h2 class="section-title">Exercices en cours <span class="badge">{{ active|length }}</span></h2>
+<div class="grid grid-2 mb">
+  {% for card in active %}
+  <article class="budget-card">
+    <div class="budget-head">
+      <div>
+        <div class="budget-name"><a href="{{ url_for('conventions.detail', cat_id=card.id) if card.id else url_for('conventions.index', category=card.name) }}">{{ card.name }}</a>
+          {% if card.prefix %}<span class="muted mono">({{ card.prefix }})</span>{% endif %}
+        </div>
+        <div class="budget-period">
+          Exercice <strong>{{ card.summary.label }}</strong>
+          · du {{ card.summary.start_date | day }} au {{ card.summary.end_date | day }}
+        </div>
+      </div>
+      <span class="badge {{ card.summary.state }}">
+        {{ {"ok": "Sain", "warn": "Alerte 80 %", "critical": "Critique 90 %",
+            "over": "Plafond atteint", "none": "Sans plafond"}[card.summary.state] }}
+      </span>
+    </div>
+
+    {% set rate = card.summary.rate or 0 %}
+    <div class="gauge" data-state="{{ card.summary.state }}" role="img"
+         aria-label="{{ card.name }} : {{ {"ok": "sain", "warn": "alerte 80 %", "critical": "critique 90 %", "over": "plafond atteint", "none": "sans plafond"}[card.summary.state] }}, {{ (rate * 100) | round(1) }} % consommés">
+      <span style="width: {{ [ (rate * 100) | round(1), 100 ] | min }}%"></span>
+      <div class="gauge-marks"><i style="left: 80%"></i><i style="left: 90%"></i></div>
+    </div>
+
+    <div class="budget-rows">
+      <div class="budget-row"><span>Plafond</span>
+        <strong>{{ card.summary.plafond | money_short if card.summary.plafond is not none else "Illimité" }}</strong></div>
+      <div class="budget-row"><span>Consommé</span><strong>{{ card.summary.consumed | money_short }}</strong></div>
+      <div class="budget-row"><span>Reste</span>
+        <strong>{{ card.summary.remaining | money_short if card.summary.remaining is not none else "—" }}</strong></div>
+      <div class="budget-row"><span>Commandes</span><strong>{{ card.doc_count }}</strong></div>
+    </div>
+
+    <div class="flex" style="margin-top: auto; padding-top: 6px;">
+      <a class="btn btn-primary btn-sm" href="{{ url_for('documents.new_document', category=card.name) }}">
+        {{ icon("file-plus", "icon icon-sm") }} Nouvelle commande
+      </a>
+      <a class="btn btn-sm" href="{{ url_for('conventions.detail', cat_id=card.id) if card.id else url_for('conventions.index', category=card.name) }}">
+        Détail
+      </a>
+      <span class="spacer"></span>
+      <span class="hint">{{ card.articles }} article(s)</span>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if no_exercice %}
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("alert", "icon icon-sm") }} Sans exercice actif</h2>
+    <span class="badge warn">{{ no_exercice|length }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">Convention</th><th scope="col" class="num">Articles</th><th><span class="visually-hidden">Action</span></th></tr></thead>
+      <tbody>
+        {% for card in no_exercice %}
+        <tr>
+          <td><strong>{{ card.name }}</strong> {% if card.prefix %}<span class="muted mono">({{ card.prefix }})</span>{% endif %}</td>
+          <td class="num">{{ card.articles }}</td>
+          <td class="right"><a class="btn btn-sm" href="{{ url_for('conventions.index', category=card.name) }}">Ouvrir un exercice</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if expired %}
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("clock", "icon icon-sm") }} Conventions expirées</h2>
+    <span class="badge warn">{{ expired|length }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">Convention</th><th scope="col">Échéance dépassée</th><th scope="col" class="num">Articles</th><th><span class="visually-hidden">Action</span></th></tr></thead>
+      <tbody>
+        {% for card in expired %}
+        <tr>
+          <td><strong>{{ card.name }}</strong></td>
+          <td class="nowrap">{{ card.expiry_date | day }}</td>
+          <td class="num">{{ card.articles }}</td>
+          <td class="right"><a class="btn btn-sm" href="{{ url_for('conventions.index', category=card.name) }}">Réactiver</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if closed %}
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("lock", "icon icon-sm") }} Conventions clôturées</h2>
+    <span class="badge">{{ closed|length }}</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">Convention</th><th scope="col" class="num">Articles</th><th><span class="visually-hidden">Action</span></th></tr></thead>
+      <tbody>
+        {% for card in closed %}
+        <tr>
+          <td><strong>{{ card.name }}</strong></td>
+          <td class="num">{{ card.articles }}</td>
+          <td class="right"><a class="btn btn-sm" href="{{ url_for('history.index', category=card.name) }}">Voir l'historique</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if not active and not no_exercice and not expired and not closed %}
+<div class="empty">
+  {{ icon("briefcase") }}
+  <strong>Aucune convention</strong>
+  <p>Importez des listes d'articles depuis l'écran <a href="{{ url_for('conventions.index') }}">Conventions</a>
+     pour commencer.</p>
+  <p><a class="btn btn-primary" href="{{ url_for('conventions.index') }}">Aller aux conventions</a></p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ title }} — {{ APP_NAME }}{% endblock %}
+{% block page %}error{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block subtitle %}Erreur {{ code }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="empty" style="border:0">
+    {{ icon("alert" if code >= 500 else "info") }}
+    <strong>{{ title }}</strong>
+    <span>{{ message }}</span>
+    <div class="flex" style="justify-content:center; gap:10px; margin-top:8px">
+      <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard.index') }}">Retour au tableau de bord</a>
+      <a class="btn btn-sm" href="{{ url_for('history.index') }}">Historique</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

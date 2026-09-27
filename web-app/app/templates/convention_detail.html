@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ cat.name }} — {{ APP_NAME }}{% endblock %}
+{% block page %}conventions{% endblock %}
+{% block heading %}{{ cat.name }}{% endblock %}
+{% block subtitle %}Fiche de suivi — {% if cat.prefix %}<span class="mono">{{ cat.prefix }}</span> · {% endif %}{{ STATUS_LABEL[status] }}{% if cat.expiry_date %} · échéance {{ cat.expiry_date | day }}{% endif %}{% endblock %}
+{% block actions %}
+<a class="btn" href="{{ url_for('conventions.index', category=cat.name) }}">{{ icon("edit", "icon icon-sm") }} Gérer</a>
+<a class="btn" href="{{ url_for('history.index', category=cat.name) }}">{{ icon("clock") }} Historique</a>
+{% if status == "active" and active %}
+<a class="btn btn-primary" href="{{ url_for('documents.new_document', category=cat.name) }}">{{ icon("file-plus") }} Nouvelle commande</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="cards" style="margin-bottom:16px">
+  <div class="card">
+    <div class="card-label">Statut</div>
+    <div class="card-value" style="font-size:19px"><span class="badge {{ STATUS_BADGE[status] }}">{{ STATUS_LABEL[status] }}</span></div>
+    <div class="card-foot">{% if status == "active" %}saisie autorisée{% else %}lecture seule{% endif %}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Exercice en cours</div>
+    <div class="card-value" style="font-size:19px">{% if active %}{{ active.label }}{% else %}—{% endif %}</div>
+    <div class="card-foot">{% if active %}du {{ active.start_date | day }} au {{ active.end_date | day }}{% else %}aucun exercice actif{% endif %}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Consommé (tous exercices)</div>
+    <div class="card-value">{{ consumed_total | money_short }}</div>
+    <div class="card-foot">{{ doc_total }} commande(s) · {{ articles }} article(s)</div>
+  </div>
+  {% if summary and summary.plafond is not none %}
+  <div class="card">
+    <div class="card-label">Plafond en cours</div>
+    <div class="card-value">{{ summary.plafond | money_short }}</div>
+    <div class="card-foot">reste {{ summary.remaining | money_short }}</div>
+  </div>
+  {% endif %}
+</div>
+
+{% if summary %}
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("chart", "icon icon-sm") }} Exercice {{ summary.label }}</h2>
+    <span class="badge {{ summary.state }}">
+      {{ {"ok": "Sain", "warn": "Alerte 80 %", "critical": "Critique 90 %",
+          "over": "Plafond atteint", "none": "Sans plafond"}[summary.state] }}
+    </span>
+  </div>
+  <div class="panel-body">
+    {% set rate = summary.rate or 0 %}
+    <div class="gauge" data-state="{{ summary.state }}" role="img"
+         aria-label="Exercice {{ summary.label }} : {{ (rate * 100) | round(1) }} % consommés">
+      <span style="width: {{ [ (rate * 100) | round(1), 100 ] | min }}%"></span>
+      <div class="gauge-marks"><i style="left: 80%"></i><i style="left: 90%"></i></div>
+    </div>
+    <div class="budget-rows mt" style="grid-template-columns: repeat(4, minmax(0, 1fr))">
+      <div class="budget-row"><span>Plafond</span><strong>{{ summary.plafond | money_short if summary.plafond is not none else "Illimité" }}</strong></div>
+      <div class="budget-row"><span>Consommé</span><strong>{{ summary.consumed | money_short }}</strong></div>
+      <div class="budget-row"><span>Reste</span><strong>{{ summary.remaining | money_short if summary.remaining is not none else "—" }}</strong></div>
+      <div class="budget-row"><span>Période</span><strong>{{ summary.start_date | day }} → {{ summary.end_date | day }}</strong></div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="panel mb">
+  <div class="panel-head">
+    <h2>{{ icon("list", "icon icon-sm") }} Exercices</h2>
+    <span class="badge">{{ exercices|length }}</span>
+  </div>
+  {% if exercices %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">Libellé</th><th scope="col">Période</th><th scope="col" class="num">Plafond</th><th scope="col">Statut</th><th scope="col" class="num">Consommé</th><th scope="col" class="num">Reste</th></tr></thead>
+      <tbody>
+        {% for ex in exercices %}
+        <tr>
+          <td><strong>{{ ex.label }}</strong></td>
+          <td class="nowrap">{{ ex.start_date | day }} → {{ ex.end_date | day }}</td>
+          <td class="num">{{ ex.plafond | money_short if ex.plafond is not none else "Illimité" }}</td>
+          <td><span class="badge {{ 'success' if ex.status == 'active' else 'none' }}">{{ "Actif" if ex.status == "active" else "Clôturé" }}</span></td>
+          {% if ex.status == "closed" %}
+          <td class="num">{{ ex.consumed_at_close | money_short }}</td>
+          <td class="num">{{ ex.remaining_at_close | money_short if ex.remaining_at_close is not none else "—" }}</td>
+          {% else %}
+          <td class="num">{{ summary.consumed | money_short if summary else "—" }} DA</td>
+          <td class="num">{{ summary.remaining | money_short if summary and summary.remaining is not none else "—" }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="border:0">
+    {{ icon("list") }}
+    <strong>Aucun exercice</strong>
+    <span>Ouvrez le premier exercice depuis la page de gestion.</span>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ icon("file", "icon icon-sm") }} Dernières commandes</h2>
+    <a class="btn btn-sm" href="{{ url_for('history.index', category=cat.name) }}">Tout voir</a>
+  </div>
+  {% if documents %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">N°</th><th scope="col">Date</th><th scope="col">Exercice</th><th scope="col" class="num">Total HT</th><th scope="col" class="num">Total TTC</th></tr></thead>
+      <tbody>
+        {% for doc in documents %}
+        <tr class="clickable">
+          <td class="mono"><a href="{{ url_for('history.index', category=cat.name, doc=doc.id) }}">{{ doc.number }}</a></td>
+          <td class="nowrap">{{ doc.created_at | day }}</td>
+          <td>{{ doc.exercice_label or "—" }}</td>
+          <td class="num">{{ doc.total_ht | money_short }}</td>
+          <td class="num">{{ doc.total_ttc | money_short }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="border:0">
+    {{ icon("file") }}
+    <strong>Aucune commande</strong>
+    <span>Cette convention n'a pas encore de commande.</span>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

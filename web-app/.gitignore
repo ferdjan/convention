@@ -1,0 +1,13 @@
+# Données de l'application (jamais versionnées)
+web_app.db
+web_app.db-*
+web_app-backup-*.db
+.session.key
+uploads/
+documents_pdf/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
