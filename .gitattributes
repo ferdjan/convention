@@ -1,0 +1,10 @@
+# Fichiers binaires : aucune conversion LF/CRLF, pas de merge.
+# Sans cela, core.autocrlf=true (global Git for Windows) insère des CR
+# dans les PDF au checkout et casse leurs tables xref.
+*.pdf  binary
+*.xls  binary
+*.xlsx binary
+*.db   binary
+*.png  binary
+*.jpg  binary
+*.ico  binary

@@ -9,27 +9,40 @@
   + mode sombre ;
 - historique filtré par convention/exercice, rapport de consommation par exercice.
 
-Vérifications effectuées (Python 3.14, `C:\Python314\python.exe`) :
+Ajout récent, validé (session du 2026-09-27) :
+
+- **modification d'un document** depuis l'historique : dialogue
+  `app/ui/dialogs/edition.py` (quantités, retrait / ajout de lignes), lecture seule
+  hors exercice actif, blocage ferme du plafond, `Database.update_document` en une
+  transaction, régénération du PDF/Excel avec restauration en cas d'échec,
+  aucune trace de modification (pas de migration de schéma).
+
+Vérifications effectuées :
 
 - `python -m compileall -q -f main.py seed_db.py app` → exit 0 ;
-- `python -m pyflakes main.py seed_db.py app` → aucune erreur ;
-- migration testée sur **copie** de la base réelle (articles/documents/lignes
-  conservés, exercices créés, anciennes tables supprimées, `foreign_key_check`
-  vide) ;
+- `python -m pyflakes main.py seed_db.py app` → aucune erreur
+  (interpréteur utilisé ici : `C:\Program Files\Python311\python.exe`,
+  `pyflakes` installé via `pip`) ;
 - scénarios : blocage à 100 % (égalité incluse), dépassement bloqué, numérotation,
-  clôture + snapshot, exercice illimité ;
-- instanciation de `App` + navigation sur les 6 écrans + bascule de thème, sans
-  exception.
+  clôture + snapshot, exercice illimité, mise à jour de document (identifiants de
+  lignes conservés, lignes retirées/supprimées, plafond bloqué en écriture) ;
+- dialogue d'édition : édition de quantité, ajout / retrait de ligne, totaux et
+  bandeau plafond, lecture seule, sauvegarde et régénération des fichiers ;
+- instanciation de `App` + navigation sur les écrans + modification depuis
+  l'historique + bascule de thème, sans exception.
 
 ## À faire par l'utilisateur
 
-- [ ] Lancer l'application (`run.bat` ou `python main.py`) : la base réelle
-      `gestion_articles.db` sera **migrée au premier lancement** (transactionnelle,
-      réversible). Une sauvegarde fraîche `gestion_articles.backup-preV2-2026-09-26.db`
-      est en place — en refaire une avant lancement par prudence.
+- [ ] Lancer l'application (`run.bat` ou `python main.py`) et tester
+      **« Modifier le document »** sur un document de l'historique (ajustement d'une
+      quantité, retrait et ajout de ligne) : vérifier les totaux, le plafond et le
+      PDF/Excel régénérés.
 - [ ] Vérifier visuellement : tableau de bord, saisie d'un document, blocage à
       100 %, clôture d'exercice, ouverture du suivant, historique filtré, rapport
       Excel, thème clair/sombre.
+
+> Remarque : sur ce poste, `C:\Python314\python.exe` n'existe pas — l'application
+> tourne avec `C:\Program Files\Python311\python.exe` (voir `run.bat`).
 
 ## Pistes d'amélioration (non engagées)
 

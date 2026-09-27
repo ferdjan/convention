@@ -18,6 +18,7 @@ from app.ui.dialogs.conventions import (
     manage_conventions,
 )
 from app.ui.dialogs.documents import show_document_items
+from app.ui.dialogs.edition import edit_document
 from app.ui.dialogs.help import FORMAT_HELP, show_excel_format
 from app.ui.dialogs.importer import ask_import_target
 
@@ -29,6 +30,7 @@ __all__ = [
     "confirm_price_refresh",
     "delete_list",
     "edit_convention_status",
+    "edit_document",
     "edit_exercice",
     "manage_conventions",
     "show_document_items",

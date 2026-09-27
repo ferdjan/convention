@@ -87,6 +87,7 @@ GestionArticles/
 │           ├── categories.py    # Suppression d'une liste
 │           ├── importer.py      # Choix de la feuille et du nom de liste
 │           ├── documents.py     # Détail des lignes d'un document
+│           ├── edition.py       # Modification des lignes d'un document
 │           └── help.py          # Rappel du format Excel
 │
 ├── source_listes.xlsx      # Classeur Excel contenant les listes initiales
@@ -121,7 +122,13 @@ base) en une opération. **Le bouton d'enregistrement se désactive quand
 
 #### `app/ui/views/history.py` — Historique
 Recherche, filtres par convention et exercice, aperçu du document sélectionné,
-ouverture PDF/Excel, export et suppression.
+ouverture PDF/Excel, export, **modification** et suppression.
+
+#### `app/ui/dialogs/edition.py` — Modification d'un document
+Fenêtre modale autonome : édition de la quantité au double-clic, retrait de ligne,
+recherche / ajout d'articles, bandeau plafond en direct, récapitulatif, puis
+régénération du PDF/Excel. Bloquée en lecture seule (exercice ou convention
+clôturé).
 
 #### `app/ui/views/conventions.py` — Conventions
 Tableau de **toutes** les conventions (statut actif / clôturé / expiré, échéance,
@@ -331,6 +338,26 @@ La TVA de 19 % s'applique à toutes les conventions. Aucune remise.
   et chemins sont enregistrés dans une **seule transaction** — jamais de document
   partiel.
 
+### Modification d'un document enregistré
+
+- Bouton **« Modifier le document »** dans l'écran Historique : fenêtre dédiée
+  avec le détail des lignes et la synthèse du plafond en direct.
+- Quantité modifiable par double-clic (puis `Entrée`, `Échap` ou perte du focus) ;
+  retrait de ligne ; recherche et ajout d'articles (cumul de quantité).
+- **Lecture seule** si la convention est clôturée / expirée ou si son exercice est
+  clôturé : le bouton est désactivé, avec le motif affiché.
+- **Prix figés** : les lignes existantes gardent leur prix ; une ligne ajoutée prend
+  le prix de la liste de l'exercice.
+- **Blocage plafond ferme** : impossible d'enregistrer si
+  `consommé hors document + nouveau total ≥ plafond` (le bouton est désactivé et
+  le récapitulatif le rappelle).
+- Après confirmation, la base est mise à jour en **une transaction unique**
+  (UPDATE des lignes existantes — leurs identifiants sont conservés —,
+  DELETE des lignes retirées, INSERT des lignes ajoutées) puis le **PDF et l'Excel
+  sont régénérés aux mêmes chemins** et écrasés. Si l'une des deux opérations
+  échoue, les anciens fichiers sont restaurés.
+- Aucune trace de modification n'est conservée (pas de colonne « modifié le »).
+
 ---
 
 ## 9. Historique
@@ -344,6 +371,8 @@ L'écran **Historique** permet de :
 - prévisualiser le document sélectionné (lignes + synthèse HT/TVA/TTC) ;
 - ouvrir le PDF ou l'Excel associé ;
 - exporter un document en Excel ;
+- **modifier un document** (quantités, lignes retirées, lignes ajoutées) puis
+  enregistrer : les totaux et le plafond sont recalculés, le PDF/Excel régénéré ;
 - supprimer un document (ses lignes sont supprimées, les fichiers restent sur le disque).
 
 ---
@@ -356,6 +385,7 @@ L'écran **Historique** permet de :
 | Tableau de bord (cartes par convention) | `app/ui/views/dashboard.py` |
 | Saisie d'un document (panier, plafond, totaux) | `app/ui/views/document.py` |
 | Historique (filtres, aperçu) | `app/ui/views/history.py` |
+| Modification d'un document enregistré | `app/ui/dialogs/edition.py` + `app/database.py` (`update_document`) |
 | Conventions et exercices | `app/ui/views/conventions.py` + `app/ui/dialogs/conventions.py` |
 | Rapport de consommation | `app/ui/views/reports.py` + `app/reports/annual.py` |
 | Paramètres (thème, TVA) | `app/ui/views/settings.py` |
@@ -416,4 +446,6 @@ Refonte majeure :
 - **refonte visuelle** : barre latérale, tableau de bord, écrans Conventions /
   Rapport / Paramètres, thème **clair moderne par défaut** + mode sombre en un clic ;
 - historique filtrable par convention et exercice ;
+- **modification d'un document** depuis l'historique (quantités, retrait et ajout de
+  lignes) avec recalcul du plafond et régénération du PDF/Excel ;
 - rapport de consommation par exercice (Excel), ligne TOTAL corrigée.

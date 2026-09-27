@@ -9,7 +9,7 @@ from app.config import COLORS, TVA_RATE
 from app.database import Database
 from app.reports.excel import build_excel
 from app.ui.common import display_date, exercice_display, money, open_path
-from app.ui.dialogs import show_document_items
+from app.ui.dialogs import edit_document, show_document_items
 
 
 class HistoryView(ttk.Frame):
@@ -140,6 +140,9 @@ class HistoryView(ttk.Frame):
         actions.pack(fill="x")
         ttk.Label(actions, text="Consulter", style="Muted.TLabel").pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="Voir les lignes", command=self.show_items).pack(side="left")
+        ttk.Button(
+            actions, text="Modifier le document", command=self.modify_document
+        ).pack(side="left", padx=(6, 0))
         ttk.Label(actions, text="Ouvrir", style="Muted.TLabel").pack(side="left", padx=(18, 6))
         ttk.Button(actions, text="PDF", command=lambda: self.open_file("pdf")).pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="Excel", command=lambda: self.open_file("excel")).pack(side="left")
@@ -272,6 +275,17 @@ class HistoryView(ttk.Frame):
         if doc_id is None:
             return
         show_document_items(self, self.db, doc_id)
+
+    def modify_document(self) -> None:
+        """Ouvre l'édition des lignes du document sélectionné.
+
+        Un document d'un exercice clôturé ou d'une convention clôturée/expirée
+        reste en lecture seule : le dialogue en affiche le motif.
+        """
+        doc_id = self.selected_id()
+        if doc_id is None:
+            return
+        edit_document(self, self.db, doc_id, on_saved=self.refresh_preserving_selection)
 
     def open_file(self, kind: str) -> None:
         doc_id = self.selected_id()

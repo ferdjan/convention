@@ -1325,6 +1325,226 @@ class Database:
         with self.connect() as conn:
             conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
 
+    def document_editable(self, document_id: int) -> tuple[bool, str]:
+        """Modifiabilité d'un document : ``(True, "")`` ou ``(False, motif)``.
+
+        Un document n'est modifiable que si sa convention **et** son exercice
+        sont encore actifs : les documents d'une convention clôturée/expirée et
+        ceux d'un exercice clôturé restent en lecture seule, le cumul archivé
+        à la clôture n'étant pas censé bouger.
+        """
+        with self.connect() as conn:
+            doc = conn.execute(
+                "SELECT category, exercice_label FROM documents WHERE id = ?",
+                (document_id,),
+            ).fetchone()
+            if not doc:
+                return False, "Document introuvable."
+            category = self._resolve_category_name(conn, doc["category"])
+            cat = conn.execute(
+                "SELECT status, expiry_date FROM categories WHERE name = ?",
+                (category,),
+            ).fetchone()
+            if not cat:
+                return False, f"La convention « {category} » n'existe plus : lecture seule."
+            status = self.effective_status(cat["status"], cat["expiry_date"])
+            if status != "active":
+                word = {"closed": "clôturée", "expiree": "expirée"}.get(status, status)
+                return False, f"La convention « {category} » est {word} : lecture seule."
+            exercice_label = doc["exercice_label"]
+            if not exercice_label:
+                return False, "Ce document n'est rattaché à aucun exercice : lecture seule."
+            exercice = conn.execute(
+                "SELECT status FROM exercices WHERE category = ? AND label = ?",
+                (category, exercice_label),
+            ).fetchone()
+            if not exercice:
+                return False, f"L'exercice « {exercice_label} » est introuvable : lecture seule."
+            if exercice["status"] != "active":
+                return False, f"L'exercice « {exercice_label} » est clôturé : lecture seule."
+        return True, ""
+
+    def update_document(
+        self,
+        document_id: int,
+        items: list[dict],
+        tva_rate: float = TVA_RATE,
+        pdf_path: str | None = None,
+        excel_path: str | None = None,
+    ) -> tuple[float, float, float]:
+        """Remplace les lignes d'un document et recalcule ses totaux.
+
+        Une seule transaction : suppression/insertion des lignes et mise à jour
+        des totaux. Une ligne existante garde son prix figé au jour de la
+        création (seule la quantité change) ; une ligne ajoutée doit appartenir
+        à la liste active avec le même prix. Le contrôle du plafond est ferme :
+        ``consommé hors ce document + nouveau total >= plafond`` refuse, égalité
+        incluse.
+        """
+        if not items:
+            raise ValueError("Un document doit contenir au moins une ligne.")
+        editable, reason = self.document_editable(document_id)
+        if not editable:
+            raise ValueError(reason)
+        total_ht, tva_amount, total_ttc = compute_totals(items, tva_rate)
+
+        with self.connect() as conn:
+            doc = conn.execute(
+                "SELECT category, exercice_label FROM documents WHERE id = ?",
+                (document_id,),
+            ).fetchone()
+            if not doc:
+                raise ValueError("Document introuvable.")
+            category = self._resolve_category_name(conn, doc["category"])
+            exercice_label = doc["exercice_label"]
+            exercice = conn.execute(
+                "SELECT * FROM exercices WHERE category = ? AND label = ?",
+                (category, exercice_label),
+            ).fetchone()
+            if not exercice:
+                raise ValueError(f"Exercice « {exercice_label} » introuvable pour « {category} ».")
+            if exercice["status"] != "active":
+                raise ValueError(
+                    f"L'exercice « {exercice_label} » est clôturé : "
+                    "ce document est en lecture seule."
+                )
+            if exercice["plafond"] is not None:
+                other_consumed = round(
+                    float(
+                        conn.execute(
+                            "SELECT COALESCE(SUM(total_ht), 0) FROM documents "
+                            "WHERE category = ? AND exercice_label = ? AND id != ?",
+                            (category, exercice_label, document_id),
+                        ).fetchone()[0]
+                        or 0.0
+                    ),
+                    2,
+                )
+                projected = round(other_consumed + total_ht, 2)
+                if projected >= round(float(exercice["plafond"]), 2):
+                    raise ValueError(
+                        "PLAFOND ATTEINT : la modification est bloquée.\n"
+                        f"Consommé hors ce document : {other_consumed:.2f} DA + "
+                        f"ce document {total_ht:.2f} DA = {projected:.2f} DA pour un "
+                        f"plafond de {float(exercice['plafond']):.2f} DA.\n"
+                        "Aucun dépassement n'est autorisé sur cette convention."
+                    )
+
+            existing = {
+                int(row["id"]): row
+                for row in conn.execute(
+                    "SELECT id, code, designation, unit, unit_price_ht "
+                    "FROM document_items WHERE document_id = ?",
+                    (document_id,),
+                ).fetchall()
+            }
+            kept_ids: set[int] = set()
+            updates: list[tuple] = []
+            insert_rows: list[tuple] = []
+            for item in items:
+                quantity = float(item["quantity"])
+                if not math.isfinite(quantity) or quantity <= 0:
+                    raise ValueError("La quantité doit être un nombre strictement positif.")
+                item_id = item.get("item_id")
+                if item_id is not None:
+                    item_id = int(item_id)
+                    if item_id in kept_ids:
+                        raise ValueError("Une même ligne du document est listée deux fois.")
+                    stored = existing.get(item_id)
+                    if stored is None:
+                        raise ValueError(
+                            f"La ligne {item.get('code', '')} n'appartient plus "
+                            "à ce document."
+                        )
+                    code, designation, unit = stored["code"], stored["designation"], stored["unit"]
+                    price = float(stored["unit_price_ht"])
+                else:
+                    if item.get("category") not in (None, category):
+                        raise ValueError(
+                            f"La ligne {item['code']} n'appartient pas à la liste {category}."
+                        )
+                    article = conn.execute(
+                        """
+                        SELECT id, unit_price_ht FROM articles
+                        WHERE category = ? AND code = ? AND designation = ? AND unit = ?
+                        """,
+                        (category, item["code"], item["designation"], item["unit"]),
+                    ).fetchone()
+                    if article is None:
+                        raise ValueError(
+                            f"L'article {item['code']} n'existe plus dans la liste {category}."
+                        )
+                    if abs(float(article["unit_price_ht"]) - float(item["unit_price_ht"])) > 0.0001:
+                        raise ValueError(
+                            f"Le prix de {item['code']} a changé. Importez la liste à jour."
+                        )
+                    code, designation, unit = str(item["code"]), str(item["designation"]), str(item["unit"])
+                    price = float(article["unit_price_ht"])
+                resolved = conn.execute(
+                    "SELECT id FROM articles WHERE category = ? AND code = ? "
+                    "AND designation = ? AND unit = ?",
+                    (category, code, designation, unit),
+                ).fetchone()
+                line_total = round(quantity * price, 2)
+                if item_id is not None:
+                    kept_ids.add(item_id)
+                    updates.append(
+                        (quantity, line_total, int(resolved["id"]) if resolved else None,
+                         item_id, document_id)
+                    )
+                else:
+                    insert_rows.append(
+                        (
+                            document_id,
+                            int(resolved["id"]) if resolved else None,
+                            code,
+                            designation,
+                            unit,
+                            price,
+                            quantity,
+                            line_total,
+                        )
+                    )
+            # Les lignes conservées gardent leur identifiant : seul le reste est
+            # remplacé, la réinsertion finissant par les lignes ajoutées.
+            removed = sorted(set(existing) - kept_ids)
+            if removed:
+                placeholders = ",".join("?" for _ in removed)
+                conn.execute(
+                    f"DELETE FROM document_items WHERE document_id = ? "
+                    f"AND id IN ({placeholders})",
+                    (document_id, *removed),
+                )
+            if updates:
+                conn.executemany(
+                    "UPDATE document_items SET quantity = ?, total_ht = ?, "
+                    "article_id = ? WHERE id = ? AND document_id = ?",
+                    updates,
+                )
+            if insert_rows:
+                conn.executemany(
+                    """
+                    INSERT INTO document_items(
+                        document_id, article_id, code, designation, unit,
+                        unit_price_ht, quantity, total_ht
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    insert_rows,
+                )
+            conn.execute(
+                """
+                UPDATE documents
+                SET total_ht = ?, tva_rate = ?, tva_amount = ?, total_ttc = ?,
+                    pdf_path = COALESCE(?, pdf_path), excel_path = COALESCE(?, excel_path)
+                WHERE id = ?
+                """,
+                (
+                    total_ht, tva_rate, tva_amount, total_ttc,
+                    pdf_path, excel_path, document_id,
+                ),
+            )
+        return total_ht, tva_amount, total_ttc
+
     def list_documents(
         self,
         text: str = "",
@@ -1360,7 +1580,8 @@ class Database:
         with self.connect() as conn:
             return conn.execute(
                 """
-                SELECT article_id, code, designation, unit, unit_price_ht, quantity, total_ht
+                SELECT id, article_id, code, designation, unit, unit_price_ht,
+                       quantity, total_ht
                 FROM document_items WHERE document_id = ? ORDER BY id
                 """,
                 (document_id,),
